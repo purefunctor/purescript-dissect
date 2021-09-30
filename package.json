@@ -1,0 +1,10 @@
+{
+  "name": "dissect",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "build": "spago build",
+    "test": "spago -x tests.dhall test",
+    "repl": "spago -x tests.dhall repl"
+  }
+}
