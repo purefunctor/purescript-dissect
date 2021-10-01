@@ -29,3 +29,6 @@ ttraverse f ps = tailRecM continue (right (Left ps))
       pure (Loop (right (Right (Tuple dba a'))))
     Right ys →
       pure (Done ys)
+
+tsequence ∷ ∀ m p q a. Dissect p q ⇒ MonadRec m ⇒ p (m a) → m (p a)
+tsequence = ttraverse identity
