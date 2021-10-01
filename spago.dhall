@@ -6,6 +6,7 @@
   , "functors"
   , "partial"
   , "prelude"
+  , "tailrec"
   , "tuples"
   ]
 , packages = ./packages.dhall
