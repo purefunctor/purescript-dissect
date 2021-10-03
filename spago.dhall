@@ -2,9 +2,7 @@
 , dependencies =
   [ "bifunctors"
   , "either"
-  , "fixed-points"
   , "functors"
-  , "lists"
   , "partial"
   , "prelude"
   , "tailrec"

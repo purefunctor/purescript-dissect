@@ -2,59 +2,52 @@ module Data.Functor.Polynomial.Generic where
 
 import Prelude
 
-import Data.Either (Either(..))
-import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial as P
+import Data.Functor.Polynomial.Extra as E
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep as G
-import Data.List (List(..), (:))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, right)
-import Type.Proxy (Proxy(..))
 
-class Polynomial ∷ ∀ k. k → Type → Type → Constraint
-class Polynomial t f r | t f → r where
-  polynomial ∷ Proxy t → f → r
+class Polynomial ∷ Type → Type → Constraint
+class Polynomial f p | f → p, p → f where
+  toPoly ∷ f → p
+  fromPoly ∷ p → f
 
-instance Polynomial t (G.Constructor _name G.NoArguments) (P.One n) where
-  polynomial _ _ = (P.Const unit)
+instance Polynomial G.NoArguments (P.One n) where
+  toPoly _ = P.Const unit
+  fromPoly _ = G.NoArguments
 
-else instance Polynomial t (G.Argument t) (P.Id t) where
-  polynomial _ (G.Argument v) = P.Id v
+else instance Polynomial (G.Argument (F n)) (P.Id n) where
+  toPoly (G.Argument (F t)) = P.Id t
+  fromPoly (P.Id t) = (G.Argument (F t))
 
-else instance Polynomial t (G.Argument n) (P.Const n m) where
-  polynomial _ (G.Argument v) = P.Const v
+else instance Polynomial (G.Argument n) (P.Const n m) where
+  toPoly (G.Argument v) = P.Const v
+  fromPoly (P.Const v) = G.Argument v
 
-else instance (Polynomial t a (f v), Polynomial t b (g v)) ⇒ Polynomial t (G.Product a b) (P.Product f g v) where
-  polynomial t (G.Product a b) = P.Product (polynomial t a) (polynomial t b)
+else instance (Polynomial a (f v), Polynomial b (g v)) ⇒ Polynomial (G.Product a b) (P.Product f g v) where
+  toPoly (G.Product a b) = P.Product (toPoly a) (toPoly b)
+  fromPoly (P.Product a b) = G.Product (fromPoly a) (fromPoly b)
 
-else instance (Polynomial t a (f v), Polynomial t b (g v)) ⇒ Polynomial t (G.Sum a b) (P.Sum f g v) where
-  polynomial t (G.Inl l) = P.SumL (polynomial t l)
-  polynomial t (G.Inr r) = P.SumR (polynomial t r)
+else instance (Polynomial a (f v), Polynomial b (g v)) ⇒ Polynomial (G.Sum (G.Constructor n a) (G.Constructor m b)) (E.TSum n m f g v) where
+  toPoly (G.Inl (G.Constructor l)) = E.TSumL (toPoly l)
+  toPoly (G.Inr (G.Constructor r)) = E.TSumR (toPoly r)
 
-else instance (Polynomial t p r) ⇒ Polynomial t (G.Constructor _n p) r where
-  polynomial t (G.Constructor g) = polynomial t g
+  fromPoly (E.TSumL l) = G.Inl (G.Constructor (fromPoly l))
+  fromPoly (E.TSumR r) = G.Inr (G.Constructor (fromPoly r))
 
-fromGeneric ∷ ∀ t g p q. Dissect p q ⇒ Generic t g ⇒ Polynomial t g (p t) ⇒ t → Mu p
-fromGeneric = ana co
-  where
-  co ∷ t → p t
-  co = polynomial (Proxy ∷ Proxy t) <<< G.from
+else instance (Polynomial a (f v), Polynomial r (g v)) ⇒ Polynomial (G.Sum (G.Constructor n a) r) (E.TSum n "_" f g v) where
+  toPoly (G.Inl (G.Constructor l)) = E.TSumL (toPoly l)
+  toPoly (G.Inr r) = E.TSumR (toPoly r)
 
-  -- Taken verbatim from the `ssrs` library.
-  --
-  -- This is cheaper than having to create a separate package for
-  -- just for this use-case.
-  ana ∷ ∀ v. Dissect p q ⇒ (v → p v) → v → Mu p
-  ana coalgebra seed = go (right (Left (coalgebra seed))) Nil
-    where
-    go index stack =
-      case index of
-        Left (Tuple pt pd) →
-          go (right (Left (coalgebra pt))) (pd : stack)
-        Right pv →
-          case stack of
-            (pd : stk) →
-              go (right (Right (Tuple pd (In pv)))) stk
-            Nil →
-              In pv
+  fromPoly (E.TSumL l) = G.Inl (G.Constructor (fromPoly l))
+  fromPoly (E.TSumR r) = G.Inr (fromPoly r)
+
+newtype F f = F f
+
+derive instance Generic (F f) _
+
+fromGeneric ∷ ∀ t f r. Generic t f ⇒ Polynomial f r ⇒ t → r
+fromGeneric = toPoly <<< G.from
+
+toGeneric ∷ ∀ t f r. Generic t f ⇒ Polynomial f r ⇒ r → t
+toGeneric = G.to <<< fromPoly
