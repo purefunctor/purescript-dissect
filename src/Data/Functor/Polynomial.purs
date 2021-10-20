@@ -28,6 +28,9 @@ derive instance (Functor a, Functor b) ⇒ Functor (Sum a b)
 data Product ∷ ∀ k. (k → Type) → (k → Type) → k → Type
 data Product a b c = Product (a c) (b c)
 
+infixr 4 type Product as :*:
+infixr 4 Product as :*:
+
 derive instance (Functor a, Functor b) ⇒ Functor (Product a b)
 
 type One ∷ ∀ k. k → Type
@@ -35,6 +38,8 @@ type One = Const Unit
 
 type Zero ∷ ∀ k. k → Type
 type Zero = Const Void
+
+infixr 5 type Sum as :+:
 
 newtype Const_2 ∷ ∀ k l. Type → k → l → Type
 newtype Const_2 a b c = Const_2 a
