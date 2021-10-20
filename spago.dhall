@@ -7,6 +7,8 @@
   , "prelude"
   , "tailrec"
   , "tuples"
+  , "typelevel-prelude"
+  , "unsafe-coerce"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs" ]
