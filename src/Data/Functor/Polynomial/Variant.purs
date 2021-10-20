@@ -23,7 +23,7 @@ newtype VariantFRep p q a = VariantFRep
 data VariantF ∷ Row (Type → Type) → Type → Type
 data VariantF r a
 
-injVar
+inj
   ∷ ∀ n p q t r a
   . Functor p
   ⇒ Bifunctor q
@@ -33,7 +33,7 @@ injVar
   ⇒ Proxy n
   → p a
   → VariantF r a
-injVar proxy value = coerceV $ VariantFRep
+inj proxy value = coerceV $ VariantFRep
   { tag: reflectSymbol proxy
   , value
   , map
@@ -98,7 +98,7 @@ newtype VariantFRep_2 p q a b = VariantFRep_2
 data VariantF_2 ∷ Row (Type → Type → Type) → Type → Type → Type
 data VariantF_2 r a b
 
-injVar_2
+inj_2
   ∷ ∀ n p q t r a b
   . Functor p
   ⇒ Bifunctor q
@@ -108,7 +108,7 @@ injVar_2
   ⇒ Proxy n
   → q a b
   → VariantF_2 r a b
-injVar_2 proxy value = coerceV $ VariantFRep_2
+inj_2 proxy value = coerceV $ VariantFRep_2
   { tag: reflectSymbol proxy
   , value
   , bimap
