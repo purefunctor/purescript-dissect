@@ -8,7 +8,7 @@ import Data.Functor.Polynomial as P
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep as G
 import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, right)
+import Dissect.Class (class Dissect, class Plug, plug, right)
 
 class Polynomial ∷ Type → Type → Constraint
 class Polynomial f p | f → p, p → f where
@@ -81,3 +81,7 @@ instance (Dissect p p', Dissect q q') ⇒ Dissect (TSum n m p q) (TSum_2 n m p' 
 
     mindq (Left (Tuple j qd)) = Left (Tuple j (TSumR_2 qd))
     mindq (Right qc) = Right (TSumR qc)
+
+instance (Plug p p', Plug q q') ⇒ Plug (TSum n m p q) (TSum_2 n m p' q') where
+  plug x (TSumL_2 pd) = TSumL (plug x pd)
+  plug x (TSumR_2 qd) = TSumR (plug x qd)

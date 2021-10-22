@@ -7,7 +7,7 @@ import Data.Either (Either(..))
 import Data.Functor.Clown (Clown(..))
 import Data.Functor.Joker (Joker(..))
 import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, right)
+import Dissect.Class (class Dissect, class Plug, plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 
 newtype Const ∷ ∀ k. Type → k → Type
@@ -114,3 +114,21 @@ instance
 
     mindq pc (Left (Tuple j qd)) = Left (Tuple j (SumR_2 (Product_2 (Clown pc) qd)))
     mindq pc (Right qc) = Right (Product pc qc)
+
+instance Plug (Const n) Zero_2 where
+  plug _ (Const_2 z) = refute z
+
+instance Plug Id One_2 where
+  plug x (Const_2 _) = Id x
+
+instance (Plug p p', Plug q q') ⇒ Plug (Sum p q) (Sum_2 p' q') where
+  plug x (SumL_2 pd) = SumL (plug x pd)
+  plug x (SumR_2 qd) = SumR (plug x qd)
+
+instance
+  ( Plug p p'
+  , Plug q q'
+  ) ⇒
+  Plug (Product p q) (Sum_2 (Product_2 p' (Joker q)) (Product_2 (Clown p) q')) where
+  plug x (SumL_2 (Product_2 pd (Joker qx))) = Product (plug x pd) qx
+  plug x (SumR_2 (Product_2 (Clown px) qd)) = Product px (plug x qd)
