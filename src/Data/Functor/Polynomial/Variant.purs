@@ -20,7 +20,7 @@ newtype VariantFRep p q a = VariantFRep
   , right ∷ ∀ c j. Either (p j) (Tuple (q c j) c) → Either (Tuple j (q c j)) (p c)
   }
 
-data VariantF ∷ Row (Type → Type) → Type → Type
+data VariantF ∷ ∀ k. Row (k → Type) → k → Type
 data VariantF r a
 
 inj
