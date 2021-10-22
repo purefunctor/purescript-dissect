@@ -91,6 +91,7 @@ instance Functor (VariantF r) where
 newtype VariantFRep_2 p q a b = VariantFRep_2
   { tag ∷ String
   , value ∷ q a b
+  , map ∷ ∀ x y. (x → y) → p x → p y
   , bimap ∷ ∀ v w x y. (v → w) → (x → y) → q v x → q w y
   , right ∷ ∀ c j. Either (p j) (Tuple (q c j) c) → Either (Tuple j (q c j)) (p c)
   }
@@ -111,6 +112,7 @@ inj_2
 inj_2 proxy value = coerceV $ VariantFRep_2
   { tag: reflectSymbol proxy
   , value
+  , map
   , bimap
   , right
   }
@@ -125,6 +127,7 @@ instance Bifunctor (VariantF_2 r) where
         coerceW $ VariantFRep_2
           { tag: w.tag
           , value: w.bimap f g w.value
+          , map: w.map
           , bimap: w.bimap
           , right: w.right
           }
@@ -183,10 +186,11 @@ instance
         , right ∷ _
         , tag ∷ _
         , value ∷ _
+        , map ∷ _
         | unused
         }
       → _
     mind w (Left (Tuple j v)) =
-      Left (Tuple j (coerceI_2 { tag: w.tag, value: v, bimap: w.bimap, right: w.right }))
+      Left (Tuple j (coerceI_2 { tag: w.tag, value: v, map: w.map, bimap: w.bimap, right: w.right }))
     mind w (Right d) =
-      Right (coerceI { tag: w.tag, value: d, bimap: w.bimap, right: w.right })
+      Right (coerceI { tag: w.tag, value: d, map: w.map, bimap: w.bimap, right: w.right })
