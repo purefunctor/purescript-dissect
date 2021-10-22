@@ -4,8 +4,7 @@ import Prelude
 
 import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial (Const(..), Id(..), One, Product(..), Sum(..))
-import Data.Functor.Polynomial.Extra (TSum)
-import Data.Functor.Polynomial.Generic (F(..), toGeneric, fromGeneric)
+import Data.Functor.Polynomial.Generic (F(..), TSum, toGeneric, fromGeneric)
 import Data.Generic.Rep (class Generic)
 import Effect (Effect)
 import Effect.Class.Console (log)
