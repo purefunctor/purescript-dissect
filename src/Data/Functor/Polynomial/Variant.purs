@@ -5,7 +5,7 @@ import Prelude
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either(..))
 import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, right)
+import Dissect.Class (class Dissect, class Plug, plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 import Type.Row as R
 import Type.RowList as RL
@@ -18,6 +18,7 @@ newtype VariantFRep p q a = VariantFRep
   , map ∷ ∀ x y. (x → y) → p x → p y
   , bimap ∷ ∀ v w x y. (v → w) → (x → y) → q v x → q w y
   , right ∷ ∀ c j. Either (p j) (Tuple (q c j) c) → Either (Tuple j (q c j)) (p c)
+  , plug ∷ ∀ x. x → q x x → p x
   }
 
 data VariantF ∷ ∀ k. Row (k → Type) → k → Type
@@ -30,6 +31,7 @@ inj
   ⇒ R.Cons n p t r
   ⇒ IsSymbol n
   ⇒ Dissect p q
+  ⇒ Plug p q
   ⇒ Proxy n
   → p a
   → VariantF r a
@@ -39,6 +41,7 @@ inj proxy value = coerceV $ VariantFRep
   , map
   , bimap
   , right
+  , plug
   }
   where
   coerceV ∷ VariantFRep p q a → VariantF r a
@@ -79,6 +82,7 @@ instance Functor (VariantF r) where
         , map: w.map
         , bimap: w.bimap
         , right: w.right
+        , plug: w.plug
         }
 
     where
@@ -94,6 +98,7 @@ newtype VariantFRep_2 p q a b = VariantFRep_2
   , map ∷ ∀ x y. (x → y) → p x → p y
   , bimap ∷ ∀ v w x y. (v → w) → (x → y) → q v x → q w y
   , right ∷ ∀ c j. Either (p j) (Tuple (q c j) c) → Either (Tuple j (q c j)) (p c)
+  , plug ∷ ∀ x. x → q x x → p x
   }
 
 data VariantF_2 ∷ Row (Type → Type → Type) → Type → Type → Type
@@ -106,6 +111,7 @@ inj_2
   ⇒ R.Cons n q t r
   ⇒ IsSymbol n
   ⇒ Dissect p q
+  ⇒ Plug p q
   ⇒ Proxy n
   → q a b
   → VariantF_2 r a b
@@ -115,6 +121,7 @@ inj_2 proxy value = coerceV $ VariantFRep_2
   , map
   , bimap
   , right
+  , plug
   }
   where
   coerceV ∷ VariantFRep_2 p q a b → VariantF_2 r a b
@@ -130,6 +137,7 @@ instance Bifunctor (VariantF_2 r) where
           , map: w.map
           , bimap: w.bimap
           , right: w.right
+          , plug: w.plug
           }
     where
     coerceV ∷ VariantF_2 _ _ _ → VariantFRep_2 _ _ _ _
@@ -187,10 +195,44 @@ instance
         , tag ∷ _
         , value ∷ _
         , map ∷ _
+        , plug ∷ _
         | unused
         }
       → _
     mind w (Left (Tuple j v)) =
-      Left (Tuple j (coerceI_2 { tag: w.tag, value: v, map: w.map, bimap: w.bimap, right: w.right }))
+      Left (Tuple j (coerceI_2 { tag: w.tag, value: v, map: w.map, bimap: w.bimap, right: w.right, plug: w.plug }))
     mind w (Right d) =
-      Right (coerceI { tag: w.tag, value: d, map: w.map, bimap: w.bimap, right: w.right })
+      Right (coerceI { tag: w.tag, value: d, map: w.map, bimap: w.bimap, right: w.right, plug: w.plug })
+
+class PlugRow ∷ RL.RowList (Type → Type) → RL.RowList (Type → Type → Type) → Constraint
+class PlugRow r s | r → s
+
+instance PlugRow RL.Nil RL.Nil
+
+else instance (PlugRow r s, Plug p q) ⇒ PlugRow (RL.Cons n p r) (RL.Cons n q s)
+
+instance
+  ( RL.RowToList r r'
+  , DissectRow r' s'
+  , PlugRow r' s'
+  , RL.ListToRow s' s
+  ) ⇒
+  Plug (VariantF r) (VariantF_2 s) where
+  plug x v =
+    let
+      (VariantFRep_2 w) = coerceW_2 v
+    in
+      coerceI
+        { tag: w.tag
+        , value: w.plug x w.value
+        , map: w.map
+        , bimap: w.bimap
+        , right: w.right
+        , plug: w.plug
+        }
+    where
+    coerceW_2 ∷ VariantF_2 _ _ _ → VariantFRep_2 _ _ _ _
+    coerceW_2 = unsafeCoerce
+
+    coerceI ∷ _ → VariantF _ _
+    coerceI = unsafeCoerce
