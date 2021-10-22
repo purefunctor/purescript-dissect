@@ -13,9 +13,6 @@ class (Functor p, Bifunctor q) ⇐ Dissect p q | p → q where
     . Either (p j) (Tuple (q c j) c)
     → Either (Tuple j (q c j)) (p c)
 
-divide :: forall p q c j. Dissect p q => p j -> Either (Tuple j (q c j)) (p c)
-divide = right <<< Left
-
 tmap ∷ ∀ p q a b. Dissect p q ⇒ (a → b) → p a → p b
 tmap f ps = continue (right (Left ps))
   where
