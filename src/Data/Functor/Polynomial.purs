@@ -1,13 +1,12 @@
 module Data.Functor.Polynomial where
 
+import Prelude
+
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either(..))
-import Data.Functor (class Functor)
 import Data.Functor.Clown (Clown(..))
 import Data.Functor.Joker (Joker(..))
 import Data.Tuple (Tuple(..))
-import Data.Unit (Unit, unit)
-import Data.Void (Void)
 import Dissect.Class (class Dissect, right)
 import Partial.Unsafe (unsafeCrashWith)
 
