@@ -188,21 +188,10 @@ instance
     coerceI ∷ _ → VariantF _ _
     coerceI = unsafeCoerce
 
-    mind
-      ∷ ∀ unused
-      . { bimap ∷ _
-        , right ∷ _
-        , tag ∷ _
-        , value ∷ _
-        , map ∷ _
-        , plug ∷ _
-        | unused
-        }
-      → _
     mind w (Left (Tuple j v)) =
-      Left (Tuple j (coerceI_2 { tag: w.tag, value: v, map: w.map, bimap: w.bimap, right: w.right, plug: w.plug }))
+      Left (Tuple j (coerceI_2 (w { value = v })))
     mind w (Right d) =
-      Right (coerceI { tag: w.tag, value: d, map: w.map, bimap: w.bimap, right: w.right, plug: w.plug })
+      Right (coerceI (w { value = d }))
 
 class PlugRow ∷ RL.RowList (Type → Type) → RL.RowList (Type → Type → Type) → Constraint
 class PlugRow r s | r → s
@@ -222,14 +211,7 @@ instance
     let
       (VariantFRep_2 w) = coerceW_2 v
     in
-      coerceI
-        { tag: w.tag
-        , value: w.plug x w.value
-        , map: w.map
-        , bimap: w.bimap
-        , right: w.right
-        , plug: w.plug
-        }
+      coerceI (w { value = w.plug x w.value })
     where
     coerceW_2 ∷ VariantF_2 _ _ _ → VariantFRep_2 _ _ _ _
     coerceW_2 = unsafeCoerce
