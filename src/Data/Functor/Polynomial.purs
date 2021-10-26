@@ -1,3 +1,5 @@
+-- | Polynomial functors and bifunctors for implementing data types that
+-- | comes equipped with free `Dissect` instances.
 module Data.Functor.Polynomial where
 
 import Prelude
@@ -10,20 +12,57 @@ import Data.Tuple (Tuple(..))
 import Dissect.Class (class Dissect, class Plug, plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 
+-- | `Const` models non-recursive data constructors.
+-- |
+-- | `Const Unit` can be used to represent data constructors with no
+-- | type arguments, while `Const Void` can be used data constructors
+-- | that do not exist at all.
 newtype Const ∷ ∀ k. Type → k → Type
 newtype Const a b = Const a
 
 derive instance Functor (Const a)
 
+-- | `Id` models recursive data constructors.
 newtype Id a = Id a
 
 derive instance Functor Id
 
+-- | `Sum` models choice between two polynomial functors.
+-- |
+-- | `Sum` can also be nested to allow for more variants, although this
+-- | comes with the cost of having to unwrap several layers of structure
+-- | when performing pattern matching.
+-- |
+-- | Note that the `Sum` of some type `a` and `Const Void` is the same
+-- | as just the type `a`.
+-- |
+-- | ```purescript
+-- | 0 (Const Void) + a ~ a
+-- | a + 0 (Const Void) ~ a
+-- | ```
 data Sum ∷ ∀ k. (k → Type) → (k → Type) → k → Type
 data Sum a b c = SumL (a c) | SumR (b c)
 
 derive instance (Functor a, Functor b) ⇒ Functor (Sum a b)
 
+-- | `Product` models a pair of polynomial functors.
+-- |
+-- | `Product` can also be nested to allow for more variants, although
+-- | this comes with the cost of having to unwrap several layers of
+-- | structure when performing pattern matching. However, one can make
+-- | use of the `(:*:)` operator for better ergonomics.
+-- |
+-- | Note that the `Product` of some type `a` and `Const Void` is `Const
+-- | Void`, while the `Product` of some type `a` and `Const Unit` is
+-- | just the type `a`.
+-- |
+-- | ```purescript
+-- | 0 (Const Void) * a ~ 0 (Const Void)
+-- | a * 0 (Const Void) ~ 0 (Const Void)
+-- |
+-- | 1 (Const Unit) * a ~ a
+-- | a * 1 (Const Unit) ~ a
+-- | ```
 data Product ∷ ∀ k. (k → Type) → (k → Type) → k → Type
 data Product a b c = Product (a c) (b c)
 
@@ -32,9 +71,11 @@ infixr 4 Product as :*:
 
 derive instance (Functor a, Functor b) ⇒ Functor (Product a b)
 
+-- | An alias for `Const Unit`.
 type One ∷ ∀ k. k → Type
 type One = Const Unit
 
+-- | An alias for `Const Void`.
 type Zero ∷ ∀ k. k → Type
 type Zero = Const Void
 
@@ -72,16 +113,21 @@ type Zero_2 = Const_2 Void
 refute ∷ ∀ a. Void → a
 refute _ = unsafeCrashWith "Invalid dissection!"
 
+-- | `Const` has no positions for elements, making it impossible to
+-- | dissect them further.
 instance Dissect (Const a) Zero_2 where
   right v = case v of
     Left (Const a) → Right (Const a)
     Right (Tuple (Const_2 z) _) → refute z
 
+-- | `Id` has a single position for an element, and unlike `Const`,
+-- | allows its dissection to be eventually filled-in.
 instance Dissect Id One_2 where
   right v = case v of
     Left (Id j) → Left (Tuple j (Const_2 unit))
     Right (Tuple (Const_2 _) c) → Right (Id c)
 
+-- | `Sum` dissects both of its polynomial functors.
 instance
   ( Dissect p p'
   , Dissect q q'
@@ -99,6 +145,10 @@ instance
     mindq (Left (Tuple j qd)) = Left (Tuple j (SumR_2 qd))
     mindq (Right qc) = Right (SumR qc)
 
+-- | `Product` either dissects its left element into a pair of the left
+-- | element's dissection and an element full of jokers; or it dissects
+-- | its right element into a pair of the right element's dissection and
+-- | an element full of clowns.
 instance
   ( Dissect p p'
   , Dissect q q'
