@@ -5,21 +5,13 @@ import Prelude
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either(..))
 import Data.Tuple (Tuple(..))
+import Data.Functor.Polynomial.Variant.Internal (VariantFRep(..), VariantFRep_2(..))
 import Dissect.Class (class Dissect, class Plug, plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 import Type.Row as R
 import Type.RowList as RL
 import Type.Prelude (class IsSymbol, Proxy, reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
-
-newtype VariantFRep p q a = VariantFRep
-  { tag ∷ String
-  , value ∷ p a
-  , map ∷ ∀ x y. (x → y) → p x → p y
-  , bimap ∷ ∀ v w x y. (v → w) → (x → y) → q v x → q w y
-  , right ∷ ∀ c j. Either (p j) (Tuple (q c j) c) → Either (Tuple j (q c j)) (p c)
-  , plug ∷ ∀ x. x → q x x → p x
-  }
 
 data VariantF ∷ ∀ k. Row (k → Type) → k → Type
 data VariantF r a
@@ -91,15 +83,6 @@ instance Functor (VariantF r) where
 
     coerceR ∷ VariantFRep _ _ _ → VariantF _ _
     coerceR = unsafeCoerce
-
-newtype VariantFRep_2 p q a b = VariantFRep_2
-  { tag ∷ String
-  , value ∷ q a b
-  , map ∷ ∀ x y. (x → y) → p x → p y
-  , bimap ∷ ∀ v w x y. (v → w) → (x → y) → q v x → q w y
-  , right ∷ ∀ c j. Either (p j) (Tuple (q c j) c) → Either (Tuple j (q c j)) (p c)
-  , plug ∷ ∀ x. x → q x x → p x
-  }
 
 data VariantF_2 ∷ Row (Type → Type → Type) → Type → Type → Type
 data VariantF_2 r a b
