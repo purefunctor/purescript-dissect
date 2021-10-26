@@ -6,13 +6,15 @@ import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
 import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial (Const(..), Product(..), (:*:))
-import Data.Functor.Polynomial.Variant (VariantF, case_, inj, on)
+import Data.Functor.Polynomial.Variant (VariantF, inj)
+import Data.Functor.Polynomial.Variant as V
 import Data.List (List(..), (:))
 import Data.Tuple (Tuple(..))
 import Dissect.Class (class Dissect, class Plug, right)
-import Type.Prelude (Proxy(..))
+import Type.Prelude (Proxy(..), class IsSymbol, reflectSymbol)
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
+import Partial.Unsafe (unsafeCrashWith)
 
 -- Stolen from purescript-ssrs
 cata ∷ ∀ p q v. Dissect p q ⇒ (p v → v) → Mu p → v
@@ -29,12 +31,43 @@ cata algebra (In pt) = go (right (Left pt)) Nil
           Nil →
             algebra pv
 
+ana ∷ ∀ p q v. Dissect p q ⇒ (v → p v) → v → Mu p
+ana coalgebra seed = go (right (Left (coalgebra seed))) Nil
+  where
+  go index stack =
+    case index of
+      Left (Tuple pt pd) →
+        go (right (Left (coalgebra pt))) (pd : stack)
+      Right pv →
+        case stack of
+          (pd : stk) →
+            go (right (Right (Tuple pd (In pv)))) stk
+          Nil →
+            In pv
+
+hylo ∷ ∀ p q v w. Dissect p q ⇒ (p v → v) → (w → p w) → w → v
+hylo algebra coalgebra seed = go (right (Left (coalgebra seed))) Nil
+  where
+  go index stack =
+    case index of
+      Left (Tuple pt pd) →
+        go (right (Left (coalgebra pt))) (pd : stack)
+      Right pv →
+        case stack of
+          (pd : stk) →
+            go (right (Right (Tuple pd (algebra pv)))) stk
+          Nil →
+            algebra pv
+
 -- Similar to `Id`, but indexed with a symbol.
 data Guarded ∷ ∀ k. Symbol → k → Type
 data Guarded i a
 
 instance Functor (Guarded i) where
   map f x = unsafeCoerce (f (unsafeCoerce x))
+
+guard ∷ ∀ i a n. Proxy i → a → Guarded i n
+guard _ = unsafeCoerce
 
 data Guarded_2 ∷ ∀ k l. Symbol → k → l → Type
 data Guarded_2 i a b = Guarded_2
@@ -54,14 +87,34 @@ instance Plug (Guarded i) (Guarded_2 i) where
 data Select ∷ ∀ k. Row k → Type
 data Select r
 
-toS ∷ ∀ i a t r. R.Cons i a t r ⇒ Proxy i → a → (Select r)
-toS _ = unsafeCoerce
+case_ ∷ ∀ a. Select () → a
+case_ v = unsafeCrashWith case unsafeCoerce v of
+  w → "Test.Universe: pattern match failed in tag [" <> w.tag <> "]."
+
+on
+  ∷ ∀ n r s a b
+  . R.Cons n a s r
+  ⇒ IsSymbol n
+  ⇒ Proxy n
+  → (a → b)
+  → (Select s → b)
+  → Select r
+  → b
+on p f g v =
+  let
+    w = unsafeCoerce v
+  in
+    if w.tag == reflectSymbol p then f w.value
+    else g (unsafeCoerce v)
+
+toS ∷ ∀ i a t r. R.Cons i a t r ⇒ IsSymbol i ⇒ Proxy i → a → (Select r)
+toS p value = unsafeCoerce { tag: reflectSymbol p, value }
 
 unS ∷ ∀ i a t r. R.Cons i a t r ⇒ Guarded i (Select r) → a
-unS = unsafeCoerce
+unS v = (unsafeCoerce v).value
 
-untoS ∷ ∀ i a t r. R.Cons i a t r ⇒ Guarded i (Select r) → Select r
-untoS = unsafeCoerce
+toG ∷ ∀ i a t r. R.Cons i a t r ⇒ IsSymbol i ⇒ Proxy i → a → Guarded i (Select r)
+toG p value = unsafeCoerce (toS p value ∷ Select r)
 
 -- 1st Type - one point of recursion
 --
@@ -107,51 +160,101 @@ type Univ = Mu UnivF
 one_ ∷ ∀ n. BaseF n
 one_ = inj _one (Const unit)
 
-many_ ∷ ∀ n. Guarded "list" n → BaseF n
-many_ n = inj _many n
+many_ ∷ ∀ a n. a → BaseF n
+many_ n = inj _many (guard _list n)
 
 nil_ ∷ ∀ n. ListF n
 nil_ = inj _nil (Const unit)
 
-cons_ ∷ ∀ n. Guarded "base" n → Guarded "list" n → ListF n
-cons_ n m = inj _cons (Product n m)
+cons_ ∷ ∀ a b n. a → b → ListF n
+cons_ n m = inj _cons (Product (guard _base n) (guard _list m))
 
 -- universe constructors
 --
 -- These "lift" the extensible constructors into a pre-defined universe
--- of types.
+-- of types. However, this adds the cost of the constructors being fully
+-- dynamic. One solution for API authors is to make use of `Guarded` in
+-- order to add type labels that can be matched against.
 
-one ∷ Guarded "base" Univ
-one = unsafeCoerce $ In (inj _base one_)
+one ∷ Univ
+one = In (inj _base one_)
 
-many ∷ Guarded "list" Univ → Guarded "base" Univ
-many n = unsafeCoerce $ In (inj _base (many_ n))
+many ∷ Univ → Univ
+many n = In (inj _base (many_ n))
 
-nil ∷ Guarded "list" Univ
-nil = unsafeCoerce $ In (inj _list nil_)
+nil ∷ Univ
+nil = In (inj _list nil_)
 
-cons ∷ Guarded "base" Univ → Guarded "list" Univ → Guarded "list" Univ
+cons ∷ Univ → Univ → Univ
 cons n m = unsafeCoerce $ In (inj _list (cons_ n m))
 
--- Construction
-xs ∷ Guarded "base" Univ
+xs ∷ Univ
 xs = many (cons one (cons one (cons one nil)))
 
--- Deconstruction
-ys ∷ Select (base ∷ Int, list ∷ Int)
-ys = cata go (unsafeCoerce xs ∷ Mu UnivF)
+-- Recursion Schemes
+
+al ∷ Univ → Select (base ∷ Int, list ∷ Int)
+al = cata go
+  where
+  go = V.case_
+    # V.on _base goBase
+    # V.on _list goList
+    where
+    goBase = V.case_
+      # V.on _one (\_ → toS _base 0)
+      # V.on _many (\n → toS _base (unS n))
+
+    goList = V.case_
+      # V.on _nil (\_ → toS _list 0)
+      # V.on _cons (\(_ :*: r) → toS _list (1 + unS r))
+
+co ∷ Select (base ∷ Int, list ∷ Int) → Univ
+co = ana go
   where
   go = case_
-    # on _base goBase
-    # on _list goList
+    # on _base
+        ( case _ of
+            0 → injBase one_
+            n → injBase (many_ (toG _list n))
+        )
+    # on _list
+        ( case _ of
+            0 → injList nil_
+            n → injList (cons_ (toG _base 0) (toG _list (n - 1)))
+        )
     where
-    goBase = case_
-      # on _one (\_ → toS _base 0)
-      # on _many (\n → untoS n)
+    injBase = inj _base
+    injList = inj _list
 
-    goList = case_
-      # on _nil (\_ → toS _list 0)
-      # on _cons (\(_ :*: r) → toS _list (1 + unS r))
+hy ∷ Select (base ∷ Int, list ∷ Int) → Select (base ∷ Int, list ∷ Int)
+hy = hylo goAl goCo
+  where
+  goAl = V.case_
+    # V.on _base goBase
+    # V.on _list goList
+    where
+    goBase = V.case_
+      # V.on _one (\_ → toS _base 0)
+      # V.on _many (\n → toS _base (unS n))
+
+    goList = V.case_
+      # V.on _nil (\_ → toS _list 0)
+      # V.on _cons (\(_ :*: r) → toS _list (1 + unS r))
+
+  goCo = case_
+    # on _base
+        ( case _ of
+            0 → injBase one_
+            n → injBase (many_ (toG _list n))
+        )
+    # on _list
+        ( case _ of
+            0 → injList nil_
+            n → injList (cons_ (toG _base 0) (toG _list (n - 1)))
+        )
+    where
+    injBase = inj _base
+    injList = inj _list
 
 -- Proxy Types
 _base ∷ Proxy "base"
