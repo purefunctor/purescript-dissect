@@ -1,3 +1,8 @@
+-- | This module provides a `VariantF`-like type specialized to contain
+-- | polynomial functors and to be dissectible itself. Likewise,
+-- | operations such as `inj`, `case_`, and `on` are also provided.
+-- |
+-- | See also: https://pursuit.purescript.org/packages/purescript-variant/
 module Data.Functor.Polynomial.Variant where
 
 import Prelude
@@ -16,6 +21,7 @@ import Unsafe.Coerce (unsafeCoerce)
 data VariantF ∷ ∀ k. Row (k → Type) → k → Type
 data VariantF r a
 
+-- | Inject a polynomial functor to a variant given a label.
 inj
   ∷ ∀ n p q t r a
   . Functor p
@@ -39,10 +45,13 @@ inj proxy value = coerceV $ VariantFRep
   coerceV ∷ VariantFRep p q a → VariantF r a
   coerceV = unsafeCoerce
 
+-- | Combinator for pattern matching.
 case_ ∷ ∀ a b. VariantF () a → b
 case_ v = unsafeCrashWith case unsafeCoerce v of
   VariantFRep w → "Data.Functor.Polynomial.Extra: pattern match failed in tag [" <> w.tag <> "]."
 
+-- | Attempt to read a variant given a label, defaulting to a failure
+-- | branch with the failing label removed.
 on
   ∷ ∀ n r s p a b
   . R.Cons n p s r
@@ -142,10 +151,10 @@ instance
   , RL.ListToRow s' s
   ) ⇒
   Dissect (VariantF r) (VariantF_2 s) where
-  -- right
-  --   ∷ ∀ c j
-  --   . Either (VariantF r j) (Tuple (VariantF_2 s c j) c)
-  --   → Either (Tuple j (VariantF_2 s c j)) (VariantF r c)
+  -- This is a lot more intuitive than it looks, but this is essentially
+  -- just taking the internal value, dissecting that, and then wrapping
+  -- it back to the appropriate type, much like `Sum`, but a lot more
+  -- messy and `unsafeCoerce`-ey.
   right x =
     case x of
       Left w →
