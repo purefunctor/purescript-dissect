@@ -238,3 +238,88 @@ In conclusion, the `Dissect` class factors out the recursion in the
 traversal of some recursive data structure. Instead of relying on
 recursion primitives, we\'ve successfully lifted recursion into a
 toolkit for implementing stateful iterative machines.
+
+## Polynomial Functors and Free Dissections
+
+This package also comes equipped with the `Data.Functor.Polynomial`
+module which can be used to define data structures generically with the
+added benefit of getting `Dissect` instances for free. As an example,
+suppose that we want to represent `List` generically:
+
+``` purescript
+data List a = Nil | Cons a (List a)
+```
+
+First, let\'s consider what our data type would look like after turning
+it into a fixed point functor:
+
+``` purescript
+data ListF a n = Nil | Cons a n
+```
+
+Then, we can start modeling components according to their signatures:
+
+-   `Nil` can be represented using `Const Unit`
+-   `Cons` is a product of some `a` and our recursive marker `n`,
+    therefore, we\'d want to have `Product (Const a) Id`
+
+Taking these two together, we end up with the `Sum` type. We can also
+use the `(:+:)`, and `(:*:)` for sums and products respectively.
+
+``` purescript
+type ListF a = Sum (Const Unit) (Product (Const a) Id)
+
+type ListF a = (Const Unit) :+: (Const a :*: Id)
+
+type List a = Mu (ListF a)
+```
+
+We\'d also want to write smart constructors for our generic data type:
+
+``` purescript
+_Nil :: forall a. List a
+_Nil = In (SumL (Const Unit))
+
+_Cons :: forall a. a -> List a -> List a
+_Cons a n = In (SumR (Product (Const a) (Id n)))
+```
+
+However, using `Sum` becomes cumbersome as more alternatives also means
+a deeper structure to pattern match against. This package provides the
+`VariantF` dissectible which allows one to use a variant type instead of
+`Sum` for easier pattern matching using the `case_` and `on`
+combinators:
+
+``` purescript
+type TreeF a = VariantF
+  ( leaf :: Const Unit
+  , fork2 :: Id :*: Const a :*: Id
+  , fork3 :: Id :*: Const a :*: Id :*: Const a :*: Id
+  )
+
+type Tree = Mu TreeF
+
+leaf :: forall a. Tree a
+leaf = In (inj (Proxy :: _ "leaf") (Const unit))
+
+fork2 :: forall a. Tree a -> a -> Tree a -> Tree a
+fork2 a b c = In (inj (Proxy :: _ "fork2") (Id a :*: Const b :*: Id c))
+
+fork3 :: forall a. Tree a -> a -> Tree a -> a -> Tree a -> Tree a
+fork3 a b c d e =
+  In (inj (Proxy :: _ "fork3")
+      (Id a :*: Const b :*: Id c :*: Const d :*: Id e))
+
+collect :: TreeF Int Int
+collect = case_
+  # on (Proxy :: _ "leaf")
+      ( \(Const _) -> 1
+      )
+  # on (Proxy :: _ "fork2")
+      ( \(Id a :*: Const b :*: Id c) -> a + b + c
+      )
+  # on (Proxy :: _ "fork3")
+      ( \(Id a :*: Const b :*: Id c :*: Const d :*: Id e) ->
+           a + b + c + d + e
+      )
+```
