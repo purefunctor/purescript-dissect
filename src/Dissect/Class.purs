@@ -46,6 +46,12 @@ class (Functor p, Bifunctor q) ⇐ Dissect p q | p → q where
     . Either (p j) (Tuple (q c j) c)
     → Either (Tuple j (q c j)) (p c)
 
+pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
+pluck = right <<< Left
+
+plant ∷ ∀ p q c j. Dissect p q ⇒ (q c j) → c → Either (Tuple j (q c j)) (p c)
+plant q c = right (Right (Tuple q c))
+
 -- | The `Plug` class describes how to take a `Bifunctor` dissection and
 -- | turn it back into the undissected `Functor`.
 class Dissect p q ⇐ Plug p q | p → q where
