@@ -1,7 +1,9 @@
 # purescript-dissect
 
-An implementation of Clowns to the Left of me, Jokers to the Right
-(Pearl): Dissecting Data Structures by Conor McBride in PureScript.
+An implementation of [Clowns to the Left of me, Jokers to the Right
+(Pearl): Dissecting Data
+Structures](https://dl.acm.org/doi/abs/10.1145/1328438.1328474) by Conor
+McBride in PureScript.
 
 This package provides three useful modules:
 
