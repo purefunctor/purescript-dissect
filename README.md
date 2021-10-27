@@ -240,5 +240,6 @@ What the `Dissect`{.verbatim} class achieves for us is that it factors
 out recursion in the transformation of some type `p c`{.verbatim} into
 `p j`{.verbatim}. This allows us to implement operations such as
 `map`{.verbatim} and `traverse`{.verbatim} in a stack-safe way as
-instead of relying on recursion primitives, we\'ve lifted recursion into
-a stack-based, iterative machine.
+instead of relying on recursion primitives, as we\'ve successfully
+lifted recursion into a toolkit for implementing stack-based iterative
+machines.
