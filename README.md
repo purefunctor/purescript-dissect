@@ -45,7 +45,7 @@ stack safety with
 [matryoshka](https://github.com/purescript-contrib/purescript-matryoshka),
 being briefly mentioned in a comment in
 [matryoshka#9](https://github.com/purescript-contrib/purescript-matryoshka/issues/9#issuecomment-400384397).
-This eventually to the creation of
+This eventually led to the creation of
 [ssrs](https://github.com/PureFunctor/purescript-ssrs) where I derived
 stack-safe recursion schemes via dissectible data structures based on
 the tail-recursive catamorphism originally implemented in the paper.

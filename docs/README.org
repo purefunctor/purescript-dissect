@@ -36,9 +36,9 @@ in  upstream // overrides // additions
 
 ** Rationale
 I originally encountered the paper while looking for a way to ensure stack safety with [[https://github.com/purescript-contrib/purescript-matryoshka][matryoshka]],
-being briefly mentioned in a comment in [[https://github.com/purescript-contrib/purescript-matryoshka/issues/9#issuecomment-400384397][matryoshka#9]]. This eventually to the creation of [[https://github.com/PureFunctor/purescript-ssrs][ssrs]] where
-I derived stack-safe recursion schemes via dissectible data structures based on the tail-recursive
-catamorphism originally implemented in the paper.
+being briefly mentioned in a comment in [[https://github.com/purescript-contrib/purescript-matryoshka/issues/9#issuecomment-400384397][matryoshka#9]]. This eventually led to the creation of [[https://github.com/PureFunctor/purescript-ssrs][ssrs]]
+where I derived stack-safe recursion schemes via dissectible data structures based on the
+tail-recursive catamorphism originally implemented in the paper.
 
 Another use-case I've found is for implementing mutually recursive collections of types which is
 explored in the paper: [[https://dl.acm.org/doi/abs/10.1145/1631687.1596585][Generic programming with fixed points for mutually recursive datatypes]]. I've
