@@ -3,25 +3,25 @@ An implementation of Clowns to the Left of me, Jokers to the Right (Pearl): Diss
 Structures by Conor McBride in PureScript.
 
 This package provides three useful modules:
-- =Dissect.Class=
-- =Data.Functor.Polynomial=
-- =Data.Functor.Polynomial.Variant=
+- ~Dissect.Class~
+- ~Data.Functor.Polynomial~
+- ~Data.Functor.Polynomial.Variant~
 
 ** Installation
-Using =spago=:
+Using ~spago~:
 
 #+begin_src
 $ spago install dissect
 #+end_src
 
-or if not present within the current package set, add it to =packages.dhall=:
+or if not present within the current package set, add it to ~packages.dhall~:
 
 #+begin_src dhall
 let upstream =
       https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20211005/packages.dhall
         sha256:2ec351f17be14b3f6421fbba36f4f01d1681e5c7f46e0c981465c4cf222de5be
 
-let overrides = {=}
+let overrides ~ {~}
 
 let additions =
       { dissect =
@@ -58,21 +58,21 @@ say we have the following tree structure:
 data TreeF n = Leaf | Fork n n n
 #+end_src
 
-Since recursion is factored out in this definition and replaced by some type variable =n=, we can fill
-it with anything we want. Likewise, we can also use the =Mu= combinator to effectively create a
+Since recursion is factored out in this definition and replaced by some type variable ~n~, we can fill
+it with anything we want. Likewise, we can also use the ~Mu~ combinator to effectively create a
 recursive data type. What we want in a dissection is to be able to represent the steps on how we're
-going to deconstruct recursive cases such as =Fork=. Let's start by visualizing the essence of
+going to deconstruct recursive cases such as ~Fork~. Let's start by visualizing the essence of
 dissecting functors:
 
-We say that =TreeF= essentially has a three seats for =n= to be contained in, and that lives under the
-=Fork= constructor:
+We say that ~TreeF~ essentially has a three seats for ~n~ to be contained in, and that lives under the
+~Fork~ constructor:
 #+begin_src purescript
 Fork [ n - n - n ]
 #+end_src
 
-Note that we take no notice to the =Leaf= constructor as it contains no seats for =n=.
+Note that we take no notice to the ~Leaf~ constructor as it contains no seats for ~n~.
 
-The =right= function allows us to take this data and pluck out an =n=, leaving us a hole:
+The ~right~ function allows us to take this data and pluck out an ~n~, leaving us a hole:
 #+begin_src purescript
 > right $ Fork [ n - n - n ]
 
@@ -86,7 +86,7 @@ Likewise, it can also take a structure with holes and something to fill it with:
 Fork [ m - n - n ]
 #+end_src
 
-If we repeat this process, we eventually end up plucking out all =n= and replacing them with =m=:
+If we repeat this process, we eventually end up plucking out all ~n~ and replacing them with ~m~:
 #+begin_src purescript
 > right $ Fork [ m - n - n ]
 n, Fork [ m - () - n ]
@@ -101,13 +101,13 @@ n, Fork [ m - m - () ]
 Fork [ m - m - m ]
 #+end_src
 
-This is, in essence, one way to do a =map= operation, but with the added benefit of being able to
+This is, in essence, one way to do a ~map~ operation, but with the added benefit of being able to
 perform it in a stack-safe manner, as we've essentially factored out recursion, and we're really
 only concerned with plucking out and planting new values into structures. Unfortunately, its cost is
 that we must describe this process ourselves by defining data types that correspond to the
 intermediate states of where the hole currently is.
 
-In reality, the =right= function has the following type:
+In reality, the ~right~ function has the following type:
 #+begin_src purescript
 right
   ∷ ∀ c j
@@ -115,10 +115,10 @@ right
   → Either (Tuple j (q c j)) (p c)
 #+end_src
 
-Its left path describes plucking out a value from some =Functor= and returning its dissection paired
-with its inner value =j=, or it returns the same =Functor= containing some value =c=; its right path on
+Its left path describes plucking out a value from some ~Functor~ and returning its dissection paired
+with its inner value ~j~, or it returns the same ~Functor~ containing some value ~c~; its right path on
 the other hand takes a dissection and a value to fill it with, and has the same return choice as the
-left path. There also exists the =pluck= and =plant= helper functions for choosing paths more elegantly:
+left path. There also exists the ~pluck~ and ~plant~ helper functions for choosing paths more elegantly:
 #+begin_src purescript
 pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
 pluck = right <<< Left
@@ -145,39 +145,39 @@ instance Bifunctor TreeF_2 where
     ForkLL n0 n1 -> ForkLL (f n0) (f n1)
 #+end_src
 
-With boilerplate out of the way, we can now write the =Dissect= instance:
+With boilerplate out of the way, we can now write the ~Dissect~ instance:
 #+begin_src purescript
 instance Dissect TreeF TreeF_2 where
   right = case _ of
     Left Leaf → Right Leaf
 #+end_src
 
-First and foremost, it's impossible to dissect the =Leaf= constructor as it contains no points of
-recursion, so we terminate immediately, however, =Fork= is much more interesting. Here we can see how
-its first element is being plucked out, with the rest of its seats being delegated to =ForkRR=.
+First and foremost, it's impossible to dissect the ~Leaf~ constructor as it contains no points of
+recursion, so we terminate immediately, however, ~Fork~ is much more interesting. Here we can see how
+its first element is being plucked out, with the rest of its seats being delegated to ~ForkRR~.
 #+begin_src purescript
   Left (Fork m n o) → Left (Tuple m (ForkRR n o))
 #+end_src
 
-Then, we move on to the =Right= path. In here, we first start by plucking out yet another seat in
-=ForkRR=, delegating the remaining seat into =ForkLR= and planting some other value in its place.
+Then, we move on to the ~Right~ path. In here, we first start by plucking out yet another seat in
+~ForkRR~, delegating the remaining seat into ~ForkLR~ and planting some other value in its place.
 #+begin_src purescript
   Right (Tuple w c) → case w of
     ForkRR m n → Left (Tuple m (ForkLR c n))
 #+end_src
 
-For =ForkLR=, we pluck out another seat yet again, planting a new value in its place using
-=ForkLL=. Likewise, we also carry over the value we've planted previously in =ForkLR=.
+For ~ForkLR~, we pluck out another seat yet again, planting a new value in its place using
+~ForkLL~. Likewise, we also carry over the value we've planted previously in ~ForkLR~.
 #+begin_src purescript
     ForkLR n m → Left (Tuple m (ForkLL n c))
 #+end_src
 
-Finally, for =ForkLL=, we start reconstructing =Fork= but with the planted values:
+Finally, for ~ForkLL~, we start reconstructing ~Fork~ but with the planted values:
 #+begin_src purescript
     ForkLL n o → Right (Fork n o c)
 #+end_src
 
-You've just written your first =Dissect= instance!
+You've just written your first ~Dissect~ instance!
 #+begin_src purescript
 instance Dissect TreeF TreeF_2 where
   right = case _ of
@@ -189,7 +189,7 @@ instance Dissect TreeF TreeF_2 where
       ForkLL n o → Right (Fork n o c)
 #+end_src
 
-What the =Dissect= class achieves for us is that it factors out recursion in the transformation of
-some type =p c= into =p j=. This allows us to implement operations such as =map= and =traverse= in a
+What the ~Dissect~ class achieves for us is that it factors out recursion in the transformation of
+some type ~p c~ into ~p j~. This allows us to implement operations such as ~map~ and ~traverse~ in a
 stack-safe way as instead of relying on recursion primitives, as we've successfully lifted recursion
 into a toolkit for implementing stack-based iterative machines.

@@ -5,25 +5,25 @@ An implementation of Clowns to the Left of me, Jokers to the Right
 
 This package provides three useful modules:
 
--   `Dissect.Class`{.verbatim}
--   `Data.Functor.Polynomial`{.verbatim}
--   `Data.Functor.Polynomial.Variant`{.verbatim}
+-   `Dissect.Class`
+-   `Data.Functor.Polynomial`
+-   `Data.Functor.Polynomial.Variant`
 
 ## Installation
 
-Using `spago`{.verbatim}:
+Using `spago`:
 
     $ spago install dissect
 
 or if not present within the current package set, add it to
-`packages.dhall`{.verbatim}:
+`packages.dhall`:
 
 ``` dhall
 let upstream =
       https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20211005/packages.dhall
         sha256:2ec351f17be14b3f6421fbba36f4f01d1681e5c7f46e0c981465c4cf222de5be
 
-let overrides = {=}
+let overrides ~ {~}
 
 let additions =
       { dissect =
@@ -74,26 +74,24 @@ data TreeF n = Leaf | Fork n n n
 ```
 
 Since recursion is factored out in this definition and replaced by some
-type variable `n`{.verbatim}, we can fill it with anything we want.
-Likewise, we can also use the `Mu`{.verbatim} combinator to effectively
-create a recursive data type. What we want in a dissection is to be able
-to represent the steps on how we\'re going to deconstruct recursive
-cases such as `Fork`{.verbatim}. Let\'s start by visualizing the essence
-of dissecting functors:
+type variable `n`, we can fill it with anything we want. Likewise, we
+can also use the `Mu` combinator to effectively create a recursive data
+type. What we want in a dissection is to be able to represent the steps
+on how we\'re going to deconstruct recursive cases such as `Fork`.
+Let\'s start by visualizing the essence of dissecting functors:
 
-We say that `TreeF`{.verbatim} essentially has a three seats for
-`n`{.verbatim} to be contained in, and that lives under the
-`Fork`{.verbatim} constructor:
+We say that `TreeF` essentially has a three seats for `n` to be
+contained in, and that lives under the `Fork` constructor:
 
 ``` purescript
 Fork [ n - n - n ]
 ```
 
-Note that we take no notice to the `Leaf`{.verbatim} constructor as it
-contains no seats for `n`{.verbatim}.
+Note that we take no notice to the `Leaf` constructor as it contains no
+seats for `n`.
 
-The `right`{.verbatim} function allows us to take this data and pluck
-out an `n`{.verbatim}, leaving us a hole:
+The `right` function allows us to take this data and pluck out an `n`,
+leaving us a hole:
 
 ``` purescript
 > right $ Fork [ n - n - n ]
@@ -110,8 +108,8 @@ it with:
 Fork [ m - n - n ]
 ```
 
-If we repeat this process, we eventually end up plucking out all
-`n`{.verbatim} and replacing them with `m`{.verbatim}:
+If we repeat this process, we eventually end up plucking out all `n` and
+replacing them with `m`:
 
 ``` purescript
 > right $ Fork [ m - n - n ]
@@ -127,15 +125,15 @@ n, Fork [ m - m - () ]
 Fork [ m - m - m ]
 ```
 
-This is, in essence, one way to do a `map`{.verbatim} operation, but
-with the added benefit of being able to perform it in a stack-safe
-manner, as we\'ve essentially factored out recursion, and we\'re really
-only concerned with plucking out and planting new values into
-structures. Unfortunately, its cost is that we must describe this
-process ourselves by defining data types that correspond to the
-intermediate states of where the hole currently is.
+This is, in essence, one way to do a `map` operation, but with the added
+benefit of being able to perform it in a stack-safe manner, as we\'ve
+essentially factored out recursion, and we\'re really only concerned
+with plucking out and planting new values into structures.
+Unfortunately, its cost is that we must describe this process ourselves
+by defining data types that correspond to the intermediate states of
+where the hole currently is.
 
-In reality, the `right`{.verbatim} function has the following type:
+In reality, the `right` function has the following type:
 
 ``` purescript
 right
@@ -144,13 +142,12 @@ right
   → Either (Tuple j (q c j)) (p c)
 ```
 
-Its left path describes plucking out a value from some
-`Functor`{.verbatim} and returning its dissection paired with its inner
-value `j`{.verbatim}, or it returns the same `Functor`{.verbatim}
-containing some value `c`{.verbatim}; its right path on the other hand
-takes a dissection and a value to fill it with, and has the same return
-choice as the left path. There also exists the `pluck`{.verbatim} and
-`plant`{.verbatim} helper functions for choosing paths more elegantly:
+Its left path describes plucking out a value from some `Functor` and
+returning its dissection paired with its inner value `j`, or it returns
+the same `Functor` containing some value `c`; its right path on the
+other hand takes a dissection and a value to fill it with, and has the
+same return choice as the left path. There also exists the `pluck` and
+`plant` helper functions for choosing paths more elegantly:
 
 ``` purescript
 pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
@@ -179,8 +176,8 @@ instance Bifunctor TreeF_2 where
     ForkLL n0 n1 -> ForkLL (f n0) (f n1)
 ```
 
-With boilerplate out of the way, we can now write the
-`Dissect`{.verbatim} instance:
+With boilerplate out of the way, we can now write the `Dissect`
+instance:
 
 ``` purescript
 instance Dissect TreeF TreeF_2 where
@@ -188,42 +185,41 @@ instance Dissect TreeF TreeF_2 where
     Left Leaf → Right Leaf
 ```
 
-First and foremost, it\'s impossible to dissect the `Leaf`{.verbatim}
-constructor as it contains no points of recursion, so we terminate
-immediately, however, `Fork`{.verbatim} is much more interesting. Here
-we can see how its first element is being plucked out, with the rest of
-its seats being delegated to `ForkRR`{.verbatim}.
+First and foremost, it\'s impossible to dissect the `Leaf` constructor
+as it contains no points of recursion, so we terminate immediately,
+however, `Fork` is much more interesting. Here we can see how its first
+element is being plucked out, with the rest of its seats being delegated
+to `ForkRR`.
 
 ``` purescript
 Left (Fork m n o) → Left (Tuple m (ForkRR n o))
 ```
 
-Then, we move on to the `Right`{.verbatim} path. In here, we first start
-by plucking out yet another seat in `ForkRR`{.verbatim}, delegating the
-remaining seat into `ForkLR`{.verbatim} and planting some other value in
-its place.
+Then, we move on to the `Right` path. In here, we first start by
+plucking out yet another seat in `ForkRR`, delegating the remaining seat
+into `ForkLR` and planting some other value in its place.
 
 ``` purescript
 Right (Tuple w c) → case w of
   ForkRR m n → Left (Tuple m (ForkLR c n))
 ```
 
-For `ForkLR`{.verbatim}, we pluck out another seat yet again, planting a
-new value in its place using `ForkLL`{.verbatim}. Likewise, we also
-carry over the value we\'ve planted previously in `ForkLR`{.verbatim}.
+For `ForkLR`, we pluck out another seat yet again, planting a new value
+in its place using `ForkLL`. Likewise, we also carry over the value
+we\'ve planted previously in `ForkLR`.
 
 ``` purescript
 ForkLR n m → Left (Tuple m (ForkLL n c))
 ```
 
-Finally, for `ForkLL`{.verbatim}, we start reconstructing
-`Fork`{.verbatim} but with the planted values:
+Finally, for `ForkLL`, we start reconstructing `Fork` but with the
+planted values:
 
 ``` purescript
 ForkLL n o → Right (Fork n o c)
 ```
 
-You\'ve just written your first `Dissect`{.verbatim} instance!
+You\'ve just written your first `Dissect` instance!
 
 ``` purescript
 instance Dissect TreeF TreeF_2 where
@@ -236,10 +232,9 @@ instance Dissect TreeF TreeF_2 where
       ForkLL n o → Right (Fork n o c)
 ```
 
-What the `Dissect`{.verbatim} class achieves for us is that it factors
-out recursion in the transformation of some type `p c`{.verbatim} into
-`p j`{.verbatim}. This allows us to implement operations such as
-`map`{.verbatim} and `traverse`{.verbatim} in a stack-safe way as
-instead of relying on recursion primitives, as we\'ve successfully
-lifted recursion into a toolkit for implementing stack-based iterative
-machines.
+What the `Dissect` class achieves for us is that it factors out
+recursion in the transformation of some type `p c` into `p j`. This
+allows us to implement operations such as `map` and `traverse` in a
+stack-safe way as instead of relying on recursion primitives, as we\'ve
+successfully lifted recursion into a toolkit for implementing
+stack-based iterative machines.
