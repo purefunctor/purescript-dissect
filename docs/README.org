@@ -189,7 +189,6 @@ instance Dissect TreeF TreeF_2 where
       ForkLL n o → Right (Fork n o c)
 #+end_src
 
-What the ~Dissect~ class achieves for us is that it factors out recursion in the transformation of
-some type ~p c~ into ~p j~. This allows us to implement operations such as ~map~ and ~traverse~ in a
-stack-safe way as instead of relying on recursion primitives, as we've successfully lifted recursion
-into a toolkit for implementing stack-based iterative machines.
+In conclusion, the ~Dissect~ class factors out the recursion in the traversal of some recursive data
+structure. Instead of relying on recursion primitives, we've successfully lifted recursion into a
+toolkit for implementing stateful iterative machines.
