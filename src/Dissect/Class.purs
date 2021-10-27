@@ -59,21 +59,21 @@ class Dissect p q ⇐ Plug p q | p → q where
 
 -- | Types that can be dissected are Functors.
 tmap ∷ ∀ p q a b. Dissect p q ⇒ (a → b) → p a → p b
-tmap f ps = continue (right (Left ps))
+tmap f = continue <<< pluck
   where
-  continue (Left (Tuple s pd)) = continue (right (Right (Tuple pd (f s))))
+  continue (Left (Tuple s pd)) = continue (plant pd (f s))
   continue (Right pt) = pt
 
 -- Derived from: https://blog.functorial.com/posts/2017-06-18-Stack-Safe-Traversals-via-Dissection.html
 -- | Types that can be dissected are Traversable, provided that the
 -- | Monad has a MonadRec instance.
 ttraverse ∷ ∀ m p q a b. Dissect p q ⇒ MonadRec m ⇒ (a → m b) → p a → m (p b)
-ttraverse f ps = tailRecM continue (right (Left ps))
+ttraverse f = tailRecM continue <<< pluck
   where
   continue = case _ of
     Left (Tuple a dba) → do
-      a' ← f a
-      pure (Loop (right (Right (Tuple dba a'))))
+      b ← f a
+      pure (Loop (plant dba b))
     Right ys →
       pure (Done ys)
 
