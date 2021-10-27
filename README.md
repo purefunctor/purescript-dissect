@@ -156,8 +156,8 @@ choice as the left path. There also exists the `pluck`{.verbatim} and
 pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
 pluck = right <<< Left
 
-plant ∷ ∀ p q c j. Dissect p q ⇒ Tuple (q c j) c → Either (Tuple j (q c j)) (p c)
-plant = right <<< Right
+plant ∷ ∀ p q c j. Dissect p q ⇒ (q c j) → c → Either (Tuple j (q c j)) (p c)
+plant q c = right (Right (Tuple q c))
 ```
 
 Now, let\'s start writing actual code:
