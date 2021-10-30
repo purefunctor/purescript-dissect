@@ -5,11 +5,9 @@ module Data.Functor.Polynomial where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor, bimap)
-import Data.Either (Either(..))
 import Data.Functor.Clown (Clown(..))
 import Data.Functor.Joker (Joker(..))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, class Plug, plug, right)
+import Dissect.Class (class Dissect, class Plug, Garden(..), CoGarden(..), plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 
 -- | `Const` models non-recursive data constructors.
@@ -117,15 +115,15 @@ refute _ = unsafeCrashWith "Invalid dissection!"
 -- | dissect them further.
 instance Dissect (Const a) Zero_2 where
   right v = case v of
-    Left (Const a) → Right (Const a)
-    Right (Tuple (Const_2 z) _) → refute z
+    Pluck (Const a) → CoPluck (Const a)
+    Plant _ (Const_2 z) → refute z -- (Tuple (Const_2 z) _) → refute z
 
 -- | `Id` has a single position for an element, and unlike `Const`,
 -- | allows its dissection to be eventually filled-in.
 instance Dissect Id One_2 where
   right v = case v of
-    Left (Id j) → Left (Tuple j (Const_2 unit))
-    Right (Tuple (Const_2 _) c) → Right (Id c)
+    Pluck (Id j) → CoPlant j (Const_2 unit)
+    Plant c _ → CoPluck (Id c)
 
 -- | `Sum` dissects both of its polynomial functors.
 instance
@@ -134,16 +132,16 @@ instance
   ) ⇒
   Dissect (Sum p q) (Sum_2 p' q') where
   right v = case v of
-    Left (SumL pj) → mindp (right (Left pj))
-    Left (SumR qj) → mindq (right (Left qj))
-    Right (Tuple (SumL_2 pd) c) → mindp (right (Right (Tuple pd c)))
-    Right (Tuple (SumR_2 qd) c) → mindq (right (Right (Tuple qd c)))
+    Pluck (SumL pj) → mindp (right (Pluck pj))
+    Pluck (SumR qj) → mindq (right (Pluck qj))
+    Plant c (SumL_2 pd) → mindp (right (Plant c pd))
+    Plant c (SumR_2 qd) → mindq (right (Plant c qd))
     where
-    mindp (Left (Tuple j pd)) = Left (Tuple j (SumL_2 pd))
-    mindp (Right pc) = Right (SumL pc)
+    mindp (CoPlant j pd) = CoPlant j (SumL_2 pd)
+    mindp (CoPluck pc) = CoPluck (SumL pc)
 
-    mindq (Left (Tuple j qd)) = Left (Tuple j (SumR_2 qd))
-    mindq (Right qc) = Right (SumR qc)
+    mindq (CoPlant j qd) = CoPlant j (SumR_2 qd)
+    mindq (CoPluck qc) = CoPluck (SumR qc)
 
 -- | `Product` either dissects its left element into a pair of the left
 -- | element's dissection and an element full of jokers; or it dissects
@@ -155,15 +153,15 @@ instance
   ) ⇒
   Dissect (Product p q) (Sum_2 (Product_2 p' (Joker q)) (Product_2 (Clown p) q')) where
   right v = case v of
-    Left (Product pj qj) → mindp (right (Left pj)) qj
-    Right (Tuple (SumL_2 (Product_2 pd (Joker qj))) c) → mindp (right (Right (Tuple pd c))) qj
-    Right (Tuple (SumR_2 (Product_2 (Clown pc) qd)) c) → mindq pc (right (Right (Tuple qd c)))
+    Pluck (Product pj qj) → mindp (right (Pluck pj)) qj
+    Plant c (SumL_2 (Product_2 pd (Joker qj))) → mindp (right (Plant c pd)) qj
+    Plant c (SumR_2 (Product_2 (Clown pc) qd)) → mindq pc (right (Plant c qd))
     where
-    mindp (Left (Tuple j pd)) qj = Left (Tuple j (SumL_2 (Product_2 pd (Joker qj))))
-    mindp (Right pc) qj = mindq pc (right (Left qj))
+    mindp (CoPlant j pd) qj = CoPlant j (SumL_2 (Product_2 pd (Joker qj)))
+    mindp (CoPluck pc) qj = mindq pc (right (Pluck qj))
 
-    mindq pc (Left (Tuple j qd)) = Left (Tuple j (SumR_2 (Product_2 (Clown pc) qd)))
-    mindq pc (Right qc) = Right (Product pc qc)
+    mindq pc (CoPlant j qd) = CoPlant j (SumR_2 (Product_2 (Clown pc) qd))
+    mindq pc (CoPluck qc) = CoPluck (Product pc qc)
 
 instance Plug (Const n) Zero_2 where
   plug _ (Const_2 z) = refute z

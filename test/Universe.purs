@@ -3,14 +3,12 @@ module Test.Universe where
 import Prelude hiding (one)
 
 import Data.Bifunctor (class Bifunctor)
-import Data.Either (Either(..))
 import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial (Const(..), Product(..), (:*:))
 import Data.Functor.Polynomial.Variant (VariantF, inj)
 import Data.Functor.Polynomial.Variant as V
 import Data.List (List(..), (:))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, class Plug, right)
+import Dissect.Class (class Dissect, class Plug, Garden(..), CoGarden(..), right)
 import Type.Prelude (Proxy(..), class IsSymbol, reflectSymbol)
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
@@ -18,44 +16,44 @@ import Partial.Unsafe (unsafeCrashWith)
 
 -- Stolen from purescript-ssrs
 cata ∷ ∀ p q v. Dissect p q ⇒ (p v → v) → Mu p → v
-cata algebra (In pt) = go (right (Left pt)) Nil
+cata algebra (In pt) = go (right (Pluck pt)) Nil
   where
   go index stack =
     case index of
-      Left (Tuple (In pt') pd) →
-        go (right (Left pt')) (pd : stack)
-      Right pv →
+      CoPlant (In pt') pd →
+        go (right (Pluck pt')) (pd : stack)
+      CoPluck pv →
         case stack of
           (pd : stk) →
-            go (right (Right (Tuple pd (algebra pv)))) stk
+            go (right (Plant (algebra pv) pd)) stk
           Nil →
             algebra pv
 
 ana ∷ ∀ p q v. Dissect p q ⇒ (v → p v) → v → Mu p
-ana coalgebra seed = go (right (Left (coalgebra seed))) Nil
+ana coalgebra seed = go (right (Pluck (coalgebra seed))) Nil
   where
   go index stack =
     case index of
-      Left (Tuple pt pd) →
-        go (right (Left (coalgebra pt))) (pd : stack)
-      Right pv →
+      CoPlant pt pd →
+        go (right (Pluck (coalgebra pt))) (pd : stack)
+      CoPluck pv →
         case stack of
           (pd : stk) →
-            go (right (Right (Tuple pd (In pv)))) stk
+            go (right (Plant (In pv) pd)) stk
           Nil →
             In pv
 
 hylo ∷ ∀ p q v w. Dissect p q ⇒ (p v → v) → (w → p w) → w → v
-hylo algebra coalgebra seed = go (right (Left (coalgebra seed))) Nil
+hylo algebra coalgebra seed = go (right (Pluck (coalgebra seed))) Nil
   where
   go index stack =
     case index of
-      Left (Tuple pt pd) →
-        go (right (Left (coalgebra pt))) (pd : stack)
-      Right pv →
+      CoPlant pt pd →
+        go (right (Pluck (coalgebra pt))) (pd : stack)
+      CoPluck pv →
         case stack of
           (pd : stk) →
-            go (right (Right (Tuple pd (algebra pv)))) stk
+            go (right (Plant (algebra pv) pd)) stk
           Nil →
             algebra pv
 
@@ -77,8 +75,8 @@ instance Bifunctor (Guarded_2 i) where
 
 instance Dissect (Guarded i) (Guarded_2 i) where
   right = case _ of
-    Left g → Left (Tuple (unsafeCoerce g) Guarded_2)
-    Right (Tuple _ c) → Right (unsafeCoerce c)
+    Pluck g → CoPlant (unsafeCoerce g) Guarded_2
+    Plant c _ -> CoPluck (unsafeCoerce c)
 
 instance Plug (Guarded i) (Guarded_2 i) where
   plug x _ = unsafeCoerce x

@@ -8,10 +8,8 @@ module Data.Functor.Polynomial.Variant where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor, bimap)
-import Data.Either (Either(..))
-import Data.Tuple (Tuple(..))
 import Data.Functor.Polynomial.Variant.Internal (VariantFRep(..), VariantFRep_2(..))
-import Dissect.Class (class Dissect, class Plug, plug, right)
+import Dissect.Class (class Dissect, class Plug, Garden(..), CoGarden(..), plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 import Type.Row as R
 import Type.RowList as RL
@@ -157,16 +155,16 @@ instance
   -- messy and `unsafeCoerce`-ey.
   right x =
     case x of
-      Left w →
+      Pluck w →
         let
           (VariantFRep w') = coerceW w
         in
-          mind w' (w'.right (Left w'.value))
-      Right (Tuple w_2 c) →
+          mind w' (w'.right (Pluck w'.value))
+      Plant c w_2 →
         let
           (VariantFRep_2 w_2') = coerceW_2 w_2
         in
-          mind w_2' (w_2'.right (Right (Tuple w_2'.value c)))
+          mind w_2' (w_2'.right (Plant c w_2'.value))
     where
     coerceW ∷ VariantF _ _ → VariantFRep _ _ _
     coerceW = unsafeCoerce
@@ -180,10 +178,8 @@ instance
     coerceI ∷ _ → VariantF _ _
     coerceI = unsafeCoerce
 
-    mind w (Left (Tuple j v)) =
-      Left (Tuple j (coerceI_2 (w { value = v })))
-    mind w (Right d) =
-      Right (coerceI (w { value = d }))
+    mind w (CoPlant j v) = CoPlant j (coerceI_2 (w { value = v }))
+    mind w (CoPluck d) = CoPluck (coerceI (w { value = d }))
 
 class PlugRow ∷ RL.RowList (Type → Type) → RL.RowList (Type → Type → Type) → Constraint
 class PlugRow r s | r → s
