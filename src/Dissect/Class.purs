@@ -8,9 +8,17 @@ module Dissect.Class
 import Prelude
 
 import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
-import Data.Either (Either(..))
 import Data.Bifunctor (class Bifunctor)
-import Data.Tuple (Tuple(..))
+
+data Garden ∷ (Type → Type) → (Type → Type → Type) → Type → Type → Type
+data Garden p q c j
+  = Pluck (p j)
+  | Plant c (q c j)
+
+data CoGarden ∷ (Type → Type) → (Type → Type → Type) → Type → Type → Type
+data CoGarden p q c j
+  = CoPluck (p c)
+  | CoPlant j (q c j)
 
 -- | The `Dissect` class describes a transformation from a `Functor`
 -- | into a `Bifunctor` that dissects a data structure into its
@@ -30,9 +38,9 @@ import Data.Tuple (Tuple(..))
 -- | ```purescript
 -- | instance Dissect (T_1 a) (T_2 a) where
 -- |   right = case _ of
--- |     Left NilF → Right NilF
--- |     Left (ConsF a n) → Left (Tuple n (ConsF_2 a))
--- |     Right (Tuple (ConsF_2 a) c) → Right (ConsF a c)
+-- |     Pluck NilF → CoPluck NilF
+-- |     Pluck (ConsF a n) → CoPlant n (ConsF_2 a)
+-- |     Plant c (ConsF_2 a) → CoPluck (ConsF a c)
 -- | ```
 -- |
 -- | See also: `Data.Functor.Polynomial` implements combinators for
@@ -41,16 +49,13 @@ import Data.Tuple (Tuple(..))
 -- |
 -- | See also: `README.md` for a more in-depth explanation and tutorial.
 class (Functor p, Bifunctor q) ⇐ Dissect p q | p → q where
-  right
-    ∷ ∀ c j
-    . Either (p j) (Tuple (q c j) c)
-    → Either (Tuple j (q c j)) (p c)
+  right ∷ ∀ c j. Garden p q c j → CoGarden p q c j
 
-pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
-pluck = right <<< Left
+pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → CoGarden p q c j
+pluck = right <<< Pluck
 
-plant ∷ ∀ p q c j. Dissect p q ⇒ (q c j) → c → Either (Tuple j (q c j)) (p c)
-plant q c = right (Right (Tuple q c))
+plant ∷ ∀ p q c j. Dissect p q ⇒ c → (q c j) → CoGarden p q c j
+plant c q = right (Plant c q)
 
 -- | The `Plug` class describes how to take a `Bifunctor` dissection and
 -- | turn it back into the undissected `Functor`.
@@ -61,8 +66,8 @@ class Dissect p q ⇐ Plug p q | p → q where
 tmap ∷ ∀ p q a b. Dissect p q ⇒ (a → b) → p a → p b
 tmap f = continue <<< pluck
   where
-  continue (Left (Tuple s pd)) = continue (plant pd (f s))
-  continue (Right pt) = pt
+  continue (CoPlant s pd) = continue (plant (f s) pd)
+  continue (CoPluck pt) = pt
 
 -- Derived from: https://blog.functorial.com/posts/2017-06-18-Stack-Safe-Traversals-via-Dissection.html
 -- | Types that can be dissected are Traversable, provided that the
@@ -71,10 +76,10 @@ ttraverse ∷ ∀ m p q a b. Dissect p q ⇒ MonadRec m ⇒ (a → m b) → p a 
 ttraverse f = tailRecM continue <<< pluck
   where
   continue = case _ of
-    Left (Tuple a dba) → do
+    CoPlant a dba → do
       b ← f a
-      pure (Loop (plant dba b))
-    Right ys →
+      pure (Loop (plant b dba))
+    CoPluck ys →
       pure (Done ys)
 
 -- | Types that can be dissected are Traversable, provided that the
