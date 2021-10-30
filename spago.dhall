@@ -1,12 +1,10 @@
 { name = "dissect"
 , dependencies =
   [ "bifunctors"
-  , "either"
   , "functors"
   , "partial"
   , "prelude"
   , "tailrec"
-  , "tuples"
   , "typelevel-prelude"
   , "unsafe-coerce"
   ]
