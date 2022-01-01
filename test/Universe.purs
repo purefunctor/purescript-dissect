@@ -1,4 +1,4 @@
-module Test.Universe2 where
+module Test.Universe where
 
 import Prelude hiding (one)
 
