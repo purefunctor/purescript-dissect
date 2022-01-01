@@ -239,3 +239,29 @@ unsafeMatch
   -> b
 unsafeMatch a c =
   unsafeOnMatch a (\_ -> unsafeCrashWith "Pattern match failed.") c
+
+case_ ∷ ∀ a b. ClosedVariantF () a → b
+case_ (ClosedVariantF { value }) = unsafeCrashWith case unsafeCoerce value of
+  Internal.VariantFRep w → "Data.Functor.Polynomial.Variant: pattern match failed in tag [" <> w.tag <> "]."
+
+on
+  ∷ ∀ n r s p a b
+  . R.Cons n p s r
+  ⇒ IsSymbol n
+  ⇒ Proxy n
+  → (p a → b)
+  → (ClosedVariantF s a → b)
+  → ClosedVariantF r a
+  → b
+on p f g v@(ClosedVariantF { value }) =
+  case coerceV value of
+    Internal.VariantFRep w
+      | w.tag == reflectSymbol p → f w.value
+    _ →
+      g (coerceR v)
+  where
+  coerceV ∷ VariantF _ _ → Internal.VariantFRep _ _
+  coerceV = unsafeCoerce
+
+  coerceR ∷ ClosedVariantF r _ → ClosedVariantF s _
+  coerceR = unsafeCoerce
