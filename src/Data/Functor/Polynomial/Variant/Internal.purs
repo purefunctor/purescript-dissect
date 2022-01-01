@@ -5,7 +5,7 @@ import Prelude
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either)
 import Data.Tuple (Tuple)
-import Dissect.Class (class Dissect, class Plug, plug, right)
+import Dissect.Class (class Dissect, right)
 import Foreign.Object (Object, empty, insert)
 import Prim.RowList (Cons, Nil, RowList)
 import Type.Prelude (class IsSymbol, class ListToRow, class RowToList, Proxy(..), reflectSymbol)
@@ -35,81 +35,41 @@ type DissectClass =
   { right :: forall p q c j. Either (p j) (Tuple (q c j) c) -> Either (Tuple j (q c j)) (p c)
   }
 
-type PlugClass =
-  { plug :: forall p q x. x -> q x x -> p x
-  }
+-- type PlugClass =
+--   { plug :: forall p q x. x -> q x x -> p x
+--   }
 
-class SearchFunctorI (v :: RowList (Type -> Type)) where
-  functorsI :: Proxy v -> Object FunctorClass
+class FindInstances (rl :: RowList (Type -> Type)) where
+  instances ::
+    Proxy rl -> { functors :: Object FunctorClass
+                , bifunctors :: Object BifunctorClass
+                , dissects :: Object DissectClass
+                -- , plugs :: Object PlugClass
+                }
 
-instance SearchFunctorI Nil where
-  functorsI _ = empty
+instance FindInstances Nil where
+  instances _ =
+    { functors: empty
+    , bifunctors: empty
+    , dissects: empty
+    -- , plugs: empty
+    }
 
-else instance (Functor f, IsSymbol n, SearchFunctorI r) => SearchFunctorI (Cons n f r) where
-  functorsI _ = insert
-    (reflectSymbol (Proxy :: _ n))
-    { map: unsafeCoerce (map :: _ -> f _ -> f _) }
-    (functorsI (Proxy :: _ r))
-
-class SearchFunctor (v :: Row (Type -> Type)) where
-  functors :: Proxy v -> Object FunctorClass
-
-instance (RowToList r s, SearchFunctorI s) => SearchFunctor r where
-  functors _ = functorsI (Proxy :: _ s)
-
-class SearchBifunctorI (v :: RowList (Type -> Type -> Type)) where
-  bifunctorsI :: Proxy v -> Object BifunctorClass
-
-instance SearchBifunctorI Nil where
-  bifunctorsI _ = empty
-
-else instance (Bifunctor f, IsSymbol n, SearchBifunctorI r) => SearchBifunctorI (Cons n f r) where
-  bifunctorsI _ = insert
-    (reflectSymbol (Proxy :: _ n))
-    { bimap: unsafeCoerce (bimap :: _ -> _ -> f _ _ -> f _ _) }
-    (bifunctorsI (Proxy :: _ r))
-
-class SearchBifunctor (v :: Row (Type -> Type -> Type)) where
-  bifunctors :: Proxy v -> Object BifunctorClass
-
-instance (RowToList r s, SearchBifunctorI s) => SearchBifunctor r where
-  bifunctors _ = bifunctorsI (Proxy :: _ s)
-
-class SearchDissectI (v :: RowList (Type -> Type)) where
-  dissectsI :: Proxy v -> Object DissectClass
-
-instance SearchDissectI Nil where
-  dissectsI _ = empty
-
-else instance (Dissect p q, IsSymbol n, SearchDissectI r) => SearchDissectI (Cons n p r) where
-  dissectsI _ = insert
-    (reflectSymbol (Proxy :: _ n))
-    { right: unsafeCoerce (right :: _ (p _) (_ (q _ _) _) -> _) }
-    (dissectsI (Proxy :: _ r))
-
-class SearchDissect (v :: Row (Type -> Type)) where
-  dissects :: Proxy v -> Object DissectClass
-
-instance (RowToList r s, SearchDissectI s) => SearchDissect r where
-  dissects _ = dissectsI (Proxy :: _ s)
-
-class SearchPlugI (v :: RowList (Type -> Type)) where
-  plugsI :: Proxy v -> Object PlugClass
-
-instance SearchPlugI Nil where
-  plugsI _ = empty
-
-else instance (Plug p q, IsSymbol n, SearchPlugI r) => SearchPlugI (Cons n p r) where
-  plugsI _ = insert
-    (reflectSymbol (Proxy :: _ n))
-    { plug: unsafeCoerce (plug :: _ -> q _ _ -> p _) }
-    (plugsI (Proxy :: _ r))
-
-class SearchPlug (v :: Row (Type -> Type)) where
-  plugs :: Proxy v -> Object PlugClass
-
-instance (RowToList r s, SearchPlugI s) => SearchPlug r where
-  plugs _ = plugsI (Proxy :: _ s)
+else instance (IsSymbol n, Functor f, Dissect f g, {- Plug f g, -} Bifunctor g, FindInstances rl) => FindInstances (Cons n f rl) where
+  instances _ =
+    let
+      { functors, bifunctors, dissects } = instances (Proxy :: _ rl)
+      n = reflectSymbol (Proxy :: _ n)
+    in
+      { functors:
+          insert n { map: unsafeCoerce (map :: _ -> f _ -> f _) } functors
+      , bifunctors:
+          insert n { bimap: unsafeCoerce (bimap :: _ -> _ -> g _ _ -> g _ _) } bifunctors
+      , dissects:
+          insert n { right: unsafeCoerce (right :: _ (f _) (_ (g _ _) _) -> _) } dissects
+      -- , plugs:
+      --     insert n { plug: unsafeCoerce (plug :: _ -> g _ _ -> f _) } plugs
+      }
 
 class DissectRowI :: RowList (Type -> Type) -> RowList (Type -> Type -> Type) -> Constraint
 class DissectRowI r s | r -> s

@@ -46,29 +46,20 @@ newtype ClosedVariantF r a =
     { functors :: Object Internal.FunctorClass
     , bifunctors :: Object Internal.BifunctorClass
     , dissects :: Object Internal.DissectClass
+    -- , plugs :: Object Internal.PlugClass
     , value :: VariantF r a
     }
 
 close
-  :: forall r s a
-   . Internal.DissectRow r s
-  => Internal.SearchFunctor r
-  => Internal.SearchBifunctor s
-  => Internal.SearchDissect r
+  :: forall r rl a
+   . RL.RowToList r rl
+  => Internal.FindInstances rl
   => VariantF r a
   -> ClosedVariantF r a
 close value =
-  let
-    functors = Internal.functors (Proxy :: _ r)
-    bifunctors = Internal.bifunctors (Proxy :: _ s)
-    dissects = Internal.dissects (Proxy :: _ r)
-  in
-    ClosedVariantF
-      { functors
-      , bifunctors
-      , dissects
-      , value
-      }
+  ClosedVariantF { functors, bifunctors, dissects, {- plugs, -} value }
+  where
+  { functors, bifunctors, dissects } = Internal.instances (Proxy :: _ rl)
 
 data VariantF_2 :: forall k l. Row (k -> l -> Type) -> k -> l -> Type
 data VariantF_2 r a b
@@ -94,6 +85,7 @@ newtype ClosedVariantF_2 r a b =
     { functors :: Object Internal.FunctorClass
     , bifunctors :: Object Internal.BifunctorClass
     , dissects :: Object Internal.DissectClass
+    -- , plugs :: Object Internal.PlugClass
     , value :: VariantF_2 r a b
     }
 
