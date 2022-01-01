@@ -234,26 +234,30 @@ However, using ~Sum~ becomes cumbersome as more alternatives also means a deeper
 match against. This package provides the ~VariantF~ dissectible which allows one to use a variant type
 instead of ~Sum~ for easier pattern matching using the ~case_~ and ~on~ combinators:
 #+begin_src purescript
-type TreeF a = VariantF
+type TreeR :: Type -> Row (Type -> Type)
+type TreeR a =
   ( leaf :: Const Unit
   , fork2 :: Id :*: Const a :*: Id
   , fork3 :: Id :*: Const a :*: Id :*: Const a :*: Id
   )
 
-type Tree = Mu TreeF
+type TreeF :: Type -> Type -> Type
+type TreeF a = ClosedVariantF (TreeR a)
+
+type Tree :: Type -> Type
+type Tree a = Mu (TreeF a)
 
 leaf :: forall a. Tree a
-leaf = In (inj (Proxy :: _ "leaf") (Const unit))
+leaf = In (close (inj (Proxy :: _ "leaf") (Const unit)))
 
 fork2 :: forall a. Tree a -> a -> Tree a -> Tree a
-fork2 a b c = In (inj (Proxy :: _ "fork2") (Id a :*: Const b :*: Id c))
+fork2 a b c = In (close (inj (Proxy :: _ "fork2") (Id a :*: Const b :*: Id c)))
 
 fork3 :: forall a. Tree a -> a -> Tree a -> a -> Tree a -> Tree a
 fork3 a b c d e =
-  In (inj (Proxy :: _ "fork3")
-      (Id a :*: Const b :*: Id c :*: Const d :*: Id e))
+  In (close (inj (Proxy :: _ "fork3") (Id a :*: Const b :*: Id c :*: Const d :*: Id e)))
 
-collect :: TreeF Int Int
+collect :: TreeF Int Int -> Int
 collect = case_
   # on (Proxy :: _ "leaf")
       ( \(Const _) -> 1

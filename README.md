@@ -50,10 +50,10 @@ This eventually led to the creation of
 stack-safe recursion schemes via dissectible data structures based on
 the tail-recursive catamorphism originally implemented in the paper.
 
-Another use-case I\'ve found is for implementing mutually recursive
+Another use-case I've found is for implementing mutually recursive
 collections of types which is explored in the paper: [Generic
 programming with fixed points for mutually recursive
-datatypes](https://dl.acm.org/doi/abs/10.1145/1631687.1596585). I\'ve
+datatypes](https://dl.acm.org/doi/abs/10.1145/1631687.1596585). I've
 implemented a proof of concept in
 [./test/Universe.purs](./test/Universe.purs) and it works well in
 conjunction with recursion schemes provided by
@@ -61,15 +61,14 @@ conjunction with recursion schemes provided by
 
 ## Quick Primer on Dissect
 
-I\'m assuming that by coming across this package, you\'re comfortable
+I'm assuming that by coming across this package, you're comfortable
 working with fixed-point functors from recursion schemes. As such, I
-won\'t try to explain everything in-depth, just the concepts that
-matter.
+won't try to explain everything in-depth, just the concepts that matter.
 
 Essentially, dissections take fixed-point functors and transform them
 into bifunctors that contain either the base case of a fixed-point data
-type or its recursive step. To contextualize this, let\'s say we have
-the following tree structure:
+type or its recursive step. To contextualize this, let's say we have the
+following tree structure:
 
 ``` purescript
 data TreeF n = Leaf | Fork n n n
@@ -79,8 +78,8 @@ Since recursion is factored out in this definition and replaced by some
 type variable `n`, we can fill it with anything we want. Likewise, we
 can also use the `Mu` combinator to effectively create a recursive data
 type. What we want in a dissection is to be able to represent the steps
-on how we\'re going to deconstruct recursive cases such as `Fork`.
-Let\'s start by visualizing the essence of dissecting functors:
+on how we're going to deconstruct recursive cases such as `Fork`. Let's
+start by visualizing the essence of dissecting functors:
 
 We say that `TreeF` essentially has a three seats for `n` to be
 contained in, and that lives under the `Fork` constructor:
@@ -128,12 +127,12 @@ Fork [ m - m - m ]
 ```
 
 This is, in essence, one way to do a `map` operation, but with the added
-benefit of being able to perform it in a stack-safe manner, as we\'ve
-essentially factored out recursion, and we\'re really only concerned
-with plucking out and planting new values into structures.
-Unfortunately, its cost is that we must describe this process ourselves
-by defining data types that correspond to the intermediate states of
-where the hole currently is.
+benefit of being able to perform it in a stack-safe manner, as we've
+essentially factored out recursion, and we're really only concerned with
+plucking out and planting new values into structures. Unfortunately, its
+cost is that we must describe this process ourselves by defining data
+types that correspond to the intermediate states of where the hole
+currently is.
 
 In reality, the `right` function has the following type:
 
@@ -159,7 +158,7 @@ plant ∷ ∀ p q c j. Dissect p q ⇒ (q c j) → c → Either (Tuple j (q c j)
 plant q c = right (Right (Tuple q c))
 ```
 
-Now, let\'s start writing actual code:
+Now, let's start writing actual code:
 
 ``` purescript
 data TreeF n = Leaf
@@ -187,8 +186,8 @@ instance Dissect TreeF TreeF_2 where
     Left Leaf → Right Leaf
 ```
 
-First and foremost, it\'s impossible to dissect the `Leaf` constructor
-as it contains no points of recursion, so we terminate immediately,
+First and foremost, it's impossible to dissect the `Leaf` constructor as
+it contains no points of recursion, so we terminate immediately,
 however, `Fork` is much more interesting. Here we can see how its first
 element is being plucked out, with the rest of its seats being delegated
 to `ForkRR`.
@@ -208,7 +207,7 @@ Right (Tuple w c) → case w of
 
 For `ForkLR`, we pluck out another seat yet again, planting a new value
 in its place using `ForkLL`. Likewise, we also carry over the value
-we\'ve planted previously in `ForkLR`.
+we've planted previously in `ForkLR`.
 
 ``` purescript
 ForkLR n m → Left (Tuple m (ForkLL n c))
@@ -221,7 +220,7 @@ planted values:
 ForkLL n o → Right (Fork n o c)
 ```
 
-You\'ve just written your first `Dissect` instance!
+You've just written your first `Dissect` instance!
 
 ``` purescript
 instance Dissect TreeF TreeF_2 where
@@ -236,8 +235,8 @@ instance Dissect TreeF TreeF_2 where
 
 In conclusion, the `Dissect` class factors out the recursion in the
 traversal of some recursive data structure. Instead of relying on
-recursion primitives, we\'ve successfully lifted recursion into a
-toolkit for implementing stateful iterative machines.
+recursion primitives, we've successfully lifted recursion into a toolkit
+for implementing stateful iterative machines.
 
 ## Polynomial Functors and Free Dissections
 
@@ -250,7 +249,7 @@ suppose that we want to represent `List` generically:
 data List a = Nil | Cons a (List a)
 ```
 
-First, let\'s consider what our data type would look like after turning
+First, let's consider what our data type would look like after turning
 it into a fixed point functor:
 
 ``` purescript
@@ -261,7 +260,7 @@ Then, we can start modeling components according to their signatures:
 
 -   `Nil` can be represented using `Const Unit`
 -   `Cons` is a product of some `a` and our recursive marker `n`,
-    therefore, we\'d want to have `Product (Const a) Id`
+    therefore, we'd want to have `Product (Const a) Id`
 
 Taking these two together, we end up with the `Sum` type. We can also
 use the `(:+:)`, and `(:*:)` for sums and products respectively.
@@ -274,7 +273,7 @@ type ListF a = (Const Unit) :+: (Const a :*: Id)
 type List a = Mu (ListF a)
 ```
 
-We\'d also want to write smart constructors for our generic data type:
+We'd also want to write smart constructors for our generic data type:
 
 ``` purescript
 _Nil :: forall a. List a
@@ -291,26 +290,30 @@ a deeper structure to pattern match against. This package provides the
 combinators:
 
 ``` purescript
-type TreeF a = VariantF
+type TreeR :: Type -> Row (Type -> Type)
+type TreeR a =
   ( leaf :: Const Unit
   , fork2 :: Id :*: Const a :*: Id
   , fork3 :: Id :*: Const a :*: Id :*: Const a :*: Id
   )
 
-type Tree = Mu TreeF
+type TreeF :: Type -> Type -> Type
+type TreeF a = ClosedVariantF (TreeR a)
+
+type Tree :: Type -> Type
+type Tree a = Mu (TreeF a)
 
 leaf :: forall a. Tree a
-leaf = In (inj (Proxy :: _ "leaf") (Const unit))
+leaf = In (close (inj (Proxy :: _ "leaf") (Const unit)))
 
 fork2 :: forall a. Tree a -> a -> Tree a -> Tree a
-fork2 a b c = In (inj (Proxy :: _ "fork2") (Id a :*: Const b :*: Id c))
+fork2 a b c = In (close (inj (Proxy :: _ "fork2") (Id a :*: Const b :*: Id c)))
 
 fork3 :: forall a. Tree a -> a -> Tree a -> a -> Tree a -> Tree a
 fork3 a b c d e =
-  In (inj (Proxy :: _ "fork3")
-      (Id a :*: Const b :*: Id c :*: Const d :*: Id e))
+  In (close (inj (Proxy :: _ "fork3") (Id a :*: Const b :*: Id c :*: Const d :*: Id e)))
 
-collect :: TreeF Int Int
+collect :: TreeF Int Int -> Int
 collect = case_
   # on (Proxy :: _ "leaf")
       ( \(Const _) -> 1
