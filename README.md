@@ -285,8 +285,8 @@ _Cons a n = In (SumR (Product (Const a) (Id n)))
 
 However, using `Sum` becomes cumbersome as more alternatives also means
 a deeper structure to pattern match against. This package provides the
-`VariantF` dissectible which allows one to use a variant type instead of
-`Sum` for easier pattern matching using the `case_` and `on`
+`ClosedVariantF` dissectible which allows one to use a variant type
+instead of `Sum` for easier pattern matching using the `case_` and `on`
 combinators:
 
 ``` purescript
@@ -325,4 +325,75 @@ collect = case_
       ( \(Id a :*: Const b :*: Id c :*: Const d :*: Id e) ->
            a + b + c + d + e
       )
+```
+
+### Deferred Instances
+
+The `Data.Functor.Polynomial.Variant` module provides two data types,
+`PreVariantF` and `VariantF`. The former is constructed using `inj`,
+much like in `purescript-variant`, and for the latter, it takes some
+`PreVariantF` whose fields have `Functor`, `Bifunctor`, and `Dissect`
+instances. By deferring when these instances are required, we're able to
+create extensible data types with relative ease.
+
+``` purescript
+type Scoops = Int
+
+-- We can define an extensible row and use it in the
+-- context of a variant, without having a Functor
+-- instance upfront.
+
+type IceCreamR :: Row (Type -> Type) -> Row (Type -> Type)
+type IceCreamR r =
+  ( vanilla :: Const Scoops
+  , chocolate :: Const Scoops
+  | r
+  )
+
+type IceCreamV :: Row (Type -> Type) -> Type -> Type
+type IceCreamV r = PreVariantF (IceCreamR r)
+
+vanilla :: forall r a. Scoops -> IceCreamV r a
+vanilla scoops = inj (Proxy :: _ "vanilla") (Const scoops)
+
+chocolate :: forall r a. Scoops -> IceCreamV r a
+chocolate scoops = inj (Proxy :: _ "chocolate") (Const scoops)
+
+-- But in order to make use of dissections, we have to
+-- "close" the type.
+
+type IceCreamC :: Type -> Type
+type IceCreamC = VariantF (IceCreamR ())
+
+closeIceCream :: forall a. IceCreamV () a -> IceCreamC a
+closeIceCream = instantiate
+
+vanillaServing :: forall a. IceCreamC a
+vanillaServing = closeIceCream $ vanilla 3
+
+chocolateServing :: forall a. IceCreamC a
+chocolateServing = closeIceCream $ chocolate 3
+
+-- Likewise, we can also extend the base variant with
+-- new fields.
+
+type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
+
+type IceCreamV' r = PreVariantF (IceCreamR' r)
+
+strawberry :: forall r a. Scoops -> IceCreamV' r a
+strawberry scoops = inj (Proxy :: _ "strawberry") (Const scoops)
+
+-- And close them once we're done.
+
+type IceCreamC' = VariantF (IceCreamR' ())
+
+closeIceCream' :: forall a. IceCreamV' () a -> IceCreamC' a
+closeIceCream' = instantiate
+
+strawberryServing :: forall a. IceCreamC' a
+strawberryServing = closeIceCream' $ strawberry 3
+
+chocolateServing' :: forall a. IceCreamC' a
+chocolateServing' = closeIceCream' $ chocolate 3
 ```

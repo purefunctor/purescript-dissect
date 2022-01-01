@@ -271,11 +271,11 @@ collect = case_
       )
 #+end_src
 
-*** Open and Closed
-The =Data.Functor.Polynomial.Variant= module provides two data types, =VariantF= and =ClosedVariantF=.
+*** Deferred Instances
+The =Data.Functor.Polynomial.Variant= module provides two data types, =PreVariantF= and =VariantF=.
 The former is constructed using =inj=, much like in =purescript-variant=, and for the latter, it takes some
-=VariantF= whose fields have =Functor=, =Bifunctor=, and =Dissect= instances. The dichotomy between these
-two types allow for an interesting pattern to arise: extensible data types:
+=PreVariantF= whose fields have =Functor=, =Bifunctor=, and =Dissect= instances. By deferring when these
+instances are required, we're able to create extensible data types with relative ease.
 #+begin_src purescript
 type Scoops = Int
 
@@ -291,7 +291,7 @@ type IceCreamR r =
   )
 
 type IceCreamV :: Row (Type -> Type) -> Type -> Type
-type IceCreamV r = VariantF (IceCreamR r)
+type IceCreamV r = PreVariantF (IceCreamR r)
 
 vanilla :: forall r a. Scoops -> IceCreamV r a
 vanilla scoops = inj (Proxy :: _ "vanilla") (Const scoops)
@@ -303,10 +303,10 @@ chocolate scoops = inj (Proxy :: _ "chocolate") (Const scoops)
 -- "close" the type.
 
 type IceCreamC :: Type -> Type
-type IceCreamC = ClosedVariantF (IceCreamR ())
+type IceCreamC = VariantF (IceCreamR ())
 
 closeIceCream :: forall a. IceCreamV () a -> IceCreamC a
-closeIceCream = close
+closeIceCream = instantiate
 
 vanillaServing :: forall a. IceCreamC a
 vanillaServing = closeIceCream $ vanilla 3
@@ -319,17 +319,17 @@ chocolateServing = closeIceCream $ chocolate 3
 
 type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
 
-type IceCreamV' r = VariantF (IceCreamR' r)
+type IceCreamV' r = PreVariantF (IceCreamR' r)
 
 strawberry :: forall r a. Scoops -> IceCreamV' r a
 strawberry scoops = inj (Proxy :: _ "strawberry") (Const scoops)
 
 -- And close them once we're done.
 
-type IceCreamC' = ClosedVariantF (IceCreamR' ())
+type IceCreamC' = VariantF (IceCreamR' ())
 
 closeIceCream' :: forall a. IceCreamV' () a -> IceCreamC' a
-closeIceCream' = close
+closeIceCream' = instantiate
 
 strawberryServing :: forall a. IceCreamC' a
 strawberryServing = closeIceCream' $ strawberry 3
