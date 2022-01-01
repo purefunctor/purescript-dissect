@@ -236,3 +236,65 @@ cataM right algebraM (In pt) = tailRecM2 go (right (Left pt)) Nil
             pure (Loop { a: right (Right (Tuple pd pv')), b: stk })
           Nil -> do
             Done <$> algebraM pv
+
+--
+
+type Scoops = Int
+
+-- We can define an extensible row and use it in the
+-- context of a variant, without having a Functor
+-- instance upfront.
+
+type IceCreamR :: Row (Type -> Type) -> Row (Type -> Type)
+type IceCreamR r =
+  ( vanilla :: Const Scoops
+  , chocolate :: Const Scoops
+  | r
+  )
+
+type IceCreamV :: Row (Type -> Type) -> Type -> Type
+type IceCreamV r = VariantF (IceCreamR r)
+
+vanilla :: forall r a. Scoops -> IceCreamV r a
+vanilla scoops = inj (Proxy :: _ "vanilla") (Const scoops)
+
+chocolate :: forall r a. Scoops -> IceCreamV r a
+chocolate scoops = inj (Proxy :: _ "chocolate") (Const scoops)
+
+-- But in order to make use of dissections, we have to
+-- "close" the type.
+
+type IceCreamC :: Type -> Type
+type IceCreamC = ClosedVariantF (IceCreamR ())
+
+closeIceCream :: forall a. IceCreamV () a -> IceCreamC a
+closeIceCream = close
+
+vanillaServing :: forall a. IceCreamC a
+vanillaServing = closeIceCream $ vanilla 3
+
+chocolateServing :: forall a. IceCreamC a
+chocolateServing = closeIceCream $ chocolate 3
+
+-- Likewise, we can also extend the base variant with
+-- new fields.
+
+type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
+
+type IceCreamV' r = VariantF (IceCreamR' r)
+
+strawberry :: forall r a. Scoops -> IceCreamV' r a
+strawberry scoops = inj (Proxy :: _ "strawberry") (Const scoops)
+
+-- And close them once we're done.
+
+type IceCreamC' = ClosedVariantF (IceCreamR' ())
+
+closeIceCream' :: forall a. IceCreamV' () a -> IceCreamC' a
+closeIceCream' = close
+
+strawberryServing :: forall a. IceCreamC' a
+strawberryServing = closeIceCream' $ strawberry 3
+
+chocolateServing' :: forall a. IceCreamC' a
+chocolateServing' = closeIceCream' $ chocolate 3
