@@ -58,20 +58,21 @@ onMatchExample = vanillaVariantF # Variant.onMatch
 unsafeOnMatchExample :: Unit
 unsafeOnMatchExample = closedVariantF # unsafeOnMatch
   { a: \(Id u) -> u
-  } (\_ -> unit)
+  }
+  (\_ -> unit)
 
 --
 
-newtype Recurse ∷ Symbol → Type → Type
+newtype Recurse :: Symbol -> Type -> Type
 newtype Recurse i a = Recurse a
 
 instance Functor (Recurse i) where
   map f (Recurse x) = Recurse (f x)
 
-recurse ∷ ∀ i a. Proxy i → a → Recurse i a
+recurse :: forall i a. Proxy i -> a -> Recurse i a
 recurse _ = Recurse
 
-data Recurse_2 ∷ ∀ k l. Symbol → k → l → Type
+data Recurse_2 :: forall k l. Symbol -> k -> l -> Type
 data Recurse_2 i a b = Recurse_2
 
 instance Bifunctor (Recurse_2 i) where
@@ -79,10 +80,10 @@ instance Bifunctor (Recurse_2 i) where
 
 instance Dissect (Recurse i) (Recurse_2 i) where
   right = case _ of
-    Left g → Left (Tuple (unsafeCoerce g) Recurse_2)
-    Right (Tuple _ c) → Right (unsafeCoerce c)
+    Left g -> Left (Tuple (unsafeCoerce g) Recurse_2)
+    Right (Tuple _ c) -> Right (unsafeCoerce c)
 
-unrecurseV :: forall i a t r. R.Cons i a t r ⇒ Recurse i (V.Variant r) → a
+unrecurseV :: forall i a t r. R.Cons i a t r => Recurse i (V.Variant r) -> a
 unrecurseV variant = (unsafeCoerce variant).value
 
 newtype Tagged :: Symbol -> Row (Type -> Type) -> Type
@@ -126,10 +127,12 @@ var :: String -> UnivF "ExprF"
 var a = coerce (closeExpr $ closeVar (Const a))
 
 add_ :: UnivF "ExprF" -> UnivF "ExprF" -> UnivF "ExprF"
-add_ (Tagged (In a)) (Tagged (In b)) = coerce (closeExpr (closeAdd (Product (recurse Proxy a) (recurse Proxy b))))
+add_ (Tagged (In a)) (Tagged (In b)) = coerce
+  (closeExpr (closeAdd (Product (recurse Proxy a) (recurse Proxy b))))
 
 let_ :: UnivF "BindF" -> UnivF "ExprF" -> UnivF "ExprF"
-let_ (Tagged (In a)) (Tagged (In b)) = coerce (closeExpr (closeLet (Product (recurse Proxy a) (recurse Proxy b))))
+let_ (Tagged (In a)) (Tagged (In b)) = coerce
+  (closeExpr (closeLet (Product (recurse Proxy a) (recurse Proxy b))))
 
 bind_ :: String -> UnivF "ExprF" -> UnivF "BindF"
 bind_ a (Tagged (In b)) = coerce (closeBind' $ closeBind (Product (Const a) (recurse Proxy b)))
@@ -168,8 +171,9 @@ eval :: V.Variant ("ExprF" :: Maybe Int, "BindF" :: Unit)
 eval = run do
   r <- STRef.new M.empty
 
-  let go = unsafeMatch
-        { expr: unsafeMatch
+  let
+    go = unsafeMatch
+      { expr: unsafeMatch
           { lit: \(Const i) ->
               pure $ rExprF $ Just i
           , var: \(Const v) -> do
@@ -180,12 +184,12 @@ eval = run do
           , "let": \(Product _ b) ->
               pure $ rExprF $ unrecurseV b
           }
-        , bind: unsafeMatch
+      , bind: unsafeMatch
           { bind: \(Product (Const n) v) -> do
               _ <- STRef.modify (M.insert n (unrecurseV v)) r
               pure $ rBindF unit
           }
-        }
+      }
 
   cataM right go program
   where
@@ -194,40 +198,41 @@ eval = run do
 
 --
 
-type Algebra f a = f a → a
+type Algebra f a = f a -> a
 
-type AlgebraM ∷ (Type → Type) → (Type → Type) → Type → Type
-type AlgebraM m f a = f a → m a
+type AlgebraM :: (Type -> Type) -> (Type -> Type) -> Type -> Type
+type AlgebraM m f a = f a -> m a
 
-type RightFnA ∷ (Type → Type) → (Type → Type → Type) → Type → Type
-type RightFnA p q v = Either (p (Mu p)) (Tuple (q v (Mu p)) v) → Either (Tuple (Mu p) (q v (Mu p))) (p v)
+type RightFnA :: (Type -> Type) -> (Type -> Type -> Type) -> Type -> Type
+type RightFnA p q v =
+  Either (p (Mu p)) (Tuple (q v (Mu p)) v) -> Either (Tuple (Mu p) (q v (Mu p))) (p v)
 
-cata ∷ ∀ p q v. RightFnA p q v → Algebra p v → Mu p → v
+cata :: forall p q v. RightFnA p q v -> Algebra p v -> Mu p -> v
 cata right algebra (In pt) = go (right (Left pt)) Nil
   where
-  go ∷ Either (Tuple (Mu p) (q v (Mu p))) (p v) → List (q v (Mu p)) → v
+  go :: Either (Tuple (Mu p) (q v (Mu p))) (p v) -> List (q v (Mu p)) -> v
   go index stack =
     case index of
-      Left (Tuple (In pt') pd) → do
+      Left (Tuple (In pt') pd) -> do
         go (right (Left pt')) (pd : stack)
-      Right pv →
+      Right pv ->
         case stack of
-          (pd : stk) →
+          (pd : stk) ->
             go (right (Right (Tuple pd (algebra pv)))) stk
-          Nil →
+          Nil ->
             algebra pv
 
-cataM ∷ ∀ m p q v. MonadRec m ⇒ RightFnA p q v → AlgebraM m p v → Mu p → m v
+cataM :: forall m p q v. MonadRec m => RightFnA p q v -> AlgebraM m p v -> Mu p -> m v
 cataM right algebraM (In pt) = tailRecM2 go (right (Left pt)) Nil
   where
   go index stack =
     case index of
-      Left (Tuple (In pt') pd) →
+      Left (Tuple (In pt') pd) ->
         pure (Loop { a: right (Left pt'), b: (pd : stack) })
-      Right pv →
+      Right pv ->
         case stack of
-          (pd : stk) → do
-            pv' ← algebraM pv
+          (pd : stk) -> do
+            pv' <- algebraM pv
             pure (Loop { a: right (Right (Tuple pd pv')), b: stk })
-          Nil → do
+          Nil -> do
             Done <$> algebraM pv

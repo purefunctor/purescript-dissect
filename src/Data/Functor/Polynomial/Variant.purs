@@ -22,46 +22,46 @@ import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 import Type.Row (class Cons)
 import Unsafe.Coerce (unsafeCoerce)
 
-data VariantF ∷ ∀ k. Row (k → Type) → k → Type
+data VariantF :: forall k. Row (k -> Type) -> k -> Type
 data VariantF r a
 
 inj
-  ∷ ∀ n f t r a
-  . Cons n f t r
-  ⇒ IsSymbol n
-  ⇒ Proxy n
-  → f a
-  → VariantF r a
+  :: forall n f t r a
+   . Cons n f t r
+  => IsSymbol n
+  => Proxy n
+  -> f a
+  -> VariantF r a
 inj proxy value = coerceV $ Internal.VariantFRep
   { tag: reflectSymbol proxy
   , value
   }
   where
-  coerceV ∷ Internal.VariantFRep f a → VariantF r a
+  coerceV :: Internal.VariantFRep f a -> VariantF r a
   coerceV = unsafeCoerce
 
-newtype ClosedVariantF ∷ ∀ k. Row (k → Type) → k → Type
+newtype ClosedVariantF :: forall k. Row (k -> Type) -> k -> Type
 newtype ClosedVariantF r a =
   ClosedVariantF
-    { functors ∷ Object Internal.FunctorClass
-    , bifunctors ∷ Object Internal.BifunctorClass
-    , dissects ∷ Object Internal.DissectClass
-    , value ∷ VariantF r a
+    { functors :: Object Internal.FunctorClass
+    , bifunctors :: Object Internal.BifunctorClass
+    , dissects :: Object Internal.DissectClass
+    , value :: VariantF r a
     }
 
 close
-  ∷ ∀ r s a
-  . Internal.DissectRow r s
-  ⇒ Internal.SearchFunctor r
-  ⇒ Internal.SearchBifunctor s
-  ⇒ Internal.SearchDissect r
-  ⇒ VariantF r a
-  → ClosedVariantF r a
+  :: forall r s a
+   . Internal.DissectRow r s
+  => Internal.SearchFunctor r
+  => Internal.SearchBifunctor s
+  => Internal.SearchDissect r
+  => VariantF r a
+  -> ClosedVariantF r a
 close value =
   let
-    functors = Internal.functors (Proxy ∷ _ r)
-    bifunctors = Internal.bifunctors (Proxy ∷ _ s)
-    dissects = Internal.dissects (Proxy ∷ _ r)
+    functors = Internal.functors (Proxy :: _ r)
+    bifunctors = Internal.bifunctors (Proxy :: _ s)
+    dissects = Internal.dissects (Proxy :: _ r)
   in
     ClosedVariantF
       { functors
@@ -70,31 +70,31 @@ close value =
       , value
       }
 
-data VariantF_2 ∷ ∀ k l. Row (k → l → Type) → k → l → Type
+data VariantF_2 :: forall k l. Row (k -> l -> Type) -> k -> l -> Type
 data VariantF_2 r a b
 
 inj_2
-  ∷ ∀ n f t r a b
-  . Cons n f t r
-  ⇒ IsSymbol n
-  ⇒ Proxy n
-  → f a b
-  → VariantF_2 r a b
+  :: forall n f t r a b
+   . Cons n f t r
+  => IsSymbol n
+  => Proxy n
+  -> f a b
+  -> VariantF_2 r a b
 inj_2 proxy value = coerceV $ Internal.VariantFRep_2
   { tag: reflectSymbol proxy
   , value
   }
   where
-  coerceV ∷ Internal.VariantFRep_2 f a b → VariantF_2 r a b
+  coerceV :: Internal.VariantFRep_2 f a b -> VariantF_2 r a b
   coerceV = unsafeCoerce
 
-newtype ClosedVariantF_2 ∷ ∀ k l. Row (k → l → Type) → k → l → Type
+newtype ClosedVariantF_2 :: forall k l. Row (k -> l -> Type) -> k -> l -> Type
 newtype ClosedVariantF_2 r a b =
   ClosedVariantF_2
-    { functors ∷ Object Internal.FunctorClass
-    , bifunctors ∷ Object Internal.BifunctorClass
-    , dissects ∷ Object Internal.DissectClass
-    , value ∷ VariantF_2 r a b
+    { functors :: Object Internal.FunctorClass
+    , bifunctors :: Object Internal.BifunctorClass
+    , dissects :: Object Internal.DissectClass
+    , value :: VariantF_2 r a b
     }
 
 instance Functor (ClosedVariantF r) where
@@ -103,18 +103,18 @@ instance Functor (ClosedVariantF r) where
       (Internal.VariantFRep v) = coerceR value
     in
       case lookup v.tag functors of
-        Just functor →
+        Just functor ->
           let
             outer = coerceV $ Internal.VariantFRep (v { value = functor.map f v.value })
           in
             ClosedVariantF (closed { value = outer })
-        Nothing →
+        Nothing ->
           unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Functor.map"
     where
-    coerceV ∷ Internal.VariantFRep _ _ → VariantF _ _
+    coerceV :: Internal.VariantFRep _ _ -> VariantF _ _
     coerceV = unsafeCoerce
 
-    coerceR ∷ VariantF _ _ → Internal.VariantFRep _ _
+    coerceR :: VariantF _ _ -> Internal.VariantFRep _ _
     coerceR = unsafeCoerce
 
 instance Bifunctor (ClosedVariantF_2 r) where
@@ -123,71 +123,71 @@ instance Bifunctor (ClosedVariantF_2 r) where
       (Internal.VariantFRep_2 v) = coerceR value
     in
       case lookup v.tag bifunctors of
-        Just bifunctor →
+        Just bifunctor ->
           let
             outer = coerceV $ Internal.VariantFRep_2 (v { value = bifunctor.bimap f g v.value })
           in
             ClosedVariantF_2 (closed { value = outer })
-        Nothing →
+        Nothing ->
           unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Bifunctor.bimap"
     where
-    coerceV ∷ Internal.VariantFRep_2 _ _ _ → VariantF_2 _ _ _
+    coerceV :: Internal.VariantFRep_2 _ _ _ -> VariantF_2 _ _ _
     coerceV = unsafeCoerce
 
-    coerceR ∷ VariantF_2 _ _ _ → Internal.VariantFRep_2 _ _ _
+    coerceR :: VariantF_2 _ _ _ -> Internal.VariantFRep_2 _ _ _
     coerceR = unsafeCoerce
 
 instance
-  Internal.DissectRow r s ⇒
+  Internal.DissectRow r s =>
   Dissect (ClosedVariantF r) (ClosedVariantF_2 s) where
   right = case _ of
-    Left (ClosedVariantF closed@{ dissects, value: x }) →
+    Left (ClosedVariantF closed@{ dissects, value: x }) ->
       let
         (Internal.VariantFRep v) = coerceR x
       in
         case lookup v.tag dissects of
-          Just dissect → case dissect.right (Left v.value) of
-            Left (Tuple j inner) →
+          Just dissect -> case dissect.right (Left v.value) of
+            Left (Tuple j inner) ->
               let
                 outer = coerceV_2 (v { value = inner })
               in
                 Left (Tuple j (ClosedVariantF_2 (closed { value = outer })))
-            Right inner →
+            Right inner ->
               let
                 outer = coerceV (v { value = inner })
               in
                 Right (ClosedVariantF (closed { value = outer }))
-          Nothing →
+          Nothing ->
             unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Dissect.right"
-    Right (Tuple (ClosedVariantF_2 closed@{ dissects, value: x }) c) →
+    Right (Tuple (ClosedVariantF_2 closed@{ dissects, value: x }) c) ->
       let
         (Internal.VariantFRep_2 v) = coerceR_2 x
       in
         case lookup v.tag dissects of
-          Just dissect → case dissect.right (Right (Tuple v.value c)) of
-            Left (Tuple j inner) →
+          Just dissect -> case dissect.right (Right (Tuple v.value c)) of
+            Left (Tuple j inner) ->
               let
                 outer = coerceV_2 (v { value = inner })
               in
                 Left (Tuple j (ClosedVariantF_2 (closed { value = outer })))
-            Right inner →
+            Right inner ->
               let
                 outer = coerceV (v { value = inner })
               in
                 Right (ClosedVariantF (closed { value = outer }))
-          Nothing →
+          Nothing ->
             unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Dissect.right"
     where
-    coerceR ∷ VariantF _ _ → Internal.VariantFRep _ _
+    coerceR :: VariantF _ _ -> Internal.VariantFRep _ _
     coerceR = unsafeCoerce
 
-    coerceR_2 ∷ VariantF_2 _ _ _ → Internal.VariantFRep_2 _ _ _
+    coerceR_2 :: VariantF_2 _ _ _ -> Internal.VariantFRep_2 _ _ _
     coerceR_2 = unsafeCoerce
 
-    coerceV ∷ _ → VariantF _ _
+    coerceV :: _ -> VariantF _ _
     coerceV = unsafeCoerce
 
-    coerceV_2 ∷ _ → VariantF_2 _ _ _
+    coerceV_2 :: _ -> VariantF_2 _ _ _
     coerceV_2 = unsafeCoerce
 
 convert :: forall r a. ClosedVariantF r a -> Variant.VariantF r a
@@ -205,14 +205,14 @@ convert (ClosedVariantF { functors, value }) =
         unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.convert"
 
 unsafeOnMatch
-  ∷ ∀ rl r r1 r2 r3 a b
-  . RL.RowToList r rl
-  ⇒ Variant.VariantFMatchCases rl r1 a b
-  ⇒ R.Union r1 r2 r3
-  ⇒ Record r
-  → (ClosedVariantF r2 a → b)
-  → ClosedVariantF r3 a
-  → b
+  :: forall rl r r1 r2 r3 a b
+   . RL.RowToList r rl
+  => Variant.VariantFMatchCases rl r1 a b
+  => R.Union r1 r2 r3
+  => Record r
+  -> (ClosedVariantF r2 a -> b)
+  -> ClosedVariantF r3 a
+  -> b
 unsafeOnMatch a b c = Variant.onMatch a (b <<< unsafeConvertFrom) (unsafeConvertTo c)
   where
   unsafeConvertTo :: forall r' a'. ClosedVariantF r' a' -> Variant.VariantF r' a'
@@ -230,12 +230,12 @@ unsafeOnMatch a b c = Variant.onMatch a (b <<< unsafeConvertFrom) (unsafeConvert
       unsafeCoerce { value: { tag: internals."type", value: internals.value } }
 
 unsafeMatch
-  ∷ ∀ rl r r1 r3 a b
-  . RL.RowToList r rl
-  ⇒ Variant.VariantFMatchCases rl r1 a b
-  ⇒ R.Union r1 () r3
-  ⇒ Record r
-  → ClosedVariantF r3 a
-  → b
+  :: forall rl r r1 r3 a b
+   . RL.RowToList r rl
+  => Variant.VariantFMatchCases rl r1 a b
+  => R.Union r1 () r3
+  => Record r
+  -> ClosedVariantF r3 a
+  -> b
 unsafeMatch a c =
   unsafeOnMatch a (\_ -> unsafeCrashWith "Pattern match failed.") c

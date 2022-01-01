@@ -9,12 +9,14 @@ import Dissect.Class (class Dissect)
 import Effect (Effect)
 import Effect.Class.Console (log)
 
-data TreeF n = Leaf
-             | Fork n n n
+data TreeF n
+  = Leaf
+  | Fork n n n
 
-data TreeF_2 n m = ForkRR m m
-                 | ForkLR n m
-                 | ForkLL n n
+data TreeF_2 n m
+  = ForkRR m m
+  | ForkLR n m
+  | ForkLL n n
 
 derive instance Functor TreeF
 
@@ -26,13 +28,13 @@ instance Bifunctor TreeF_2 where
 
 instance Dissect TreeF TreeF_2 where
   right = case _ of
-    Left Leaf → Right Leaf
-    Left (Fork m n o) → Left (Tuple m (ForkRR n o))
-    Right (Tuple w c) → case w of
-      ForkRR m n → Left (Tuple m (ForkLR c n))
-      ForkLR n m → Left (Tuple m (ForkLL n c))
-      ForkLL n o → Right (Fork n o c)
+    Left Leaf -> Right Leaf
+    Left (Fork m n o) -> Left (Tuple m (ForkRR n o))
+    Right (Tuple w c) -> case w of
+      ForkRR m n -> Left (Tuple m (ForkLR c n))
+      ForkLR n m -> Left (Tuple m (ForkLL n c))
+      ForkLL n o -> Right (Fork n o c)
 
-main ∷ Effect Unit
+main :: Effect Unit
 main = do
   log "Finished."

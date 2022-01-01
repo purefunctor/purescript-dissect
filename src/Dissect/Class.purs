@@ -8,8 +8,8 @@ module Dissect.Class
 import Prelude
 
 import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
-import Data.Either (Either(..))
 import Data.Bifunctor (class Bifunctor)
+import Data.Either (Either(..))
 import Data.Tuple (Tuple(..))
 
 -- | The `Dissect` class describes a transformation from a `Functor`
@@ -40,25 +40,25 @@ import Data.Tuple (Tuple(..))
 -- | free.
 -- |
 -- | See also: `README.md` for a more in-depth explanation and tutorial.
-class (Functor p, Bifunctor q) ⇐ Dissect p q | p → q where
+class (Functor p, Bifunctor q) <= Dissect p q | p -> q where
   right
-    ∷ ∀ c j
-    . Either (p j) (Tuple (q c j) c)
-    → Either (Tuple j (q c j)) (p c)
+    :: forall c j
+     . Either (p j) (Tuple (q c j) c)
+    -> Either (Tuple j (q c j)) (p c)
 
-pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
+pluck :: forall p q c j. Dissect p q => p j -> Either (Tuple j (q c j)) (p c)
 pluck = right <<< Left
 
-plant ∷ ∀ p q c j. Dissect p q ⇒ (q c j) → c → Either (Tuple j (q c j)) (p c)
+plant :: forall p q c j. Dissect p q => (q c j) -> c -> Either (Tuple j (q c j)) (p c)
 plant q c = right (Right (Tuple q c))
 
 -- | The `Plug` class describes how to take a `Bifunctor` dissection and
 -- | turn it back into the undissected `Functor`.
-class Dissect p q ⇐ Plug p q | p → q where
-  plug ∷ ∀ x. x → q x x → p x
+class Dissect p q <= Plug p q | p -> q where
+  plug :: forall x. x -> q x x -> p x
 
 -- | Types that can be dissected are Functors.
-tmap ∷ ∀ p q a b. Dissect p q ⇒ (a → b) → p a → p b
+tmap :: forall p q a b. Dissect p q => (a -> b) -> p a -> p b
 tmap f = continue <<< pluck
   where
   continue (Left (Tuple s pd)) = continue (plant pd (f s))
@@ -67,17 +67,17 @@ tmap f = continue <<< pluck
 -- Derived from: https://blog.functorial.com/posts/2017-06-18-Stack-Safe-Traversals-via-Dissection.html
 -- | Types that can be dissected are Traversable, provided that the
 -- | Monad has a MonadRec instance.
-ttraverse ∷ ∀ m p q a b. Dissect p q ⇒ MonadRec m ⇒ (a → m b) → p a → m (p b)
+ttraverse :: forall m p q a b. Dissect p q => MonadRec m => (a -> m b) -> p a -> m (p b)
 ttraverse f = tailRecM continue <<< pluck
   where
   continue = case _ of
-    Left (Tuple a dba) → do
-      b ← f a
+    Left (Tuple a dba) -> do
+      b <- f a
       pure (Loop (plant dba b))
-    Right ys →
+    Right ys ->
       pure (Done ys)
 
 -- | Types that can be dissected are Traversable, provided that the
 -- | Monad has a MonadRec instance.
-tsequence ∷ ∀ m p q a. Dissect p q ⇒ MonadRec m ⇒ p (m a) → m (p a)
+tsequence :: forall m p q a. Dissect p q => MonadRec m => p (m a) -> m (p a)
 tsequence = ttraverse identity
