@@ -7,206 +7,235 @@ module Data.Functor.Polynomial.Variant where
 
 import Prelude
 
-import Data.Bifunctor (class Bifunctor, bimap)
+import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
+import Data.Functor.Polynomial.Variant.Internal as Internal
+import Data.Functor.Variant as Variant
+import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
-import Data.Functor.Polynomial.Variant.Internal (VariantFRep(..), VariantFRep_2(..))
-import Dissect.Class (class Dissect, class Plug, plug, right)
+import Dissect.Class (class Dissect)
+import Foreign.Object (Object, lookup)
 import Partial.Unsafe (unsafeCrashWith)
-import Type.Row as R
-import Type.RowList as RL
-import Type.Prelude (class IsSymbol, Proxy, reflectSymbol)
+import Prim.Row as R
+import Prim.RowList as RL
+import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
+import Type.Row (class Cons)
 import Unsafe.Coerce (unsafeCoerce)
 
 data VariantF ∷ ∀ k. Row (k → Type) → k → Type
 data VariantF r a
 
--- | Inject a polynomial functor to a variant given a label.
 inj
-  ∷ ∀ n p q t r a
-  . Functor p
-  ⇒ Bifunctor q
-  ⇒ R.Cons n p t r
+  ∷ ∀ n f t r a
+  . Cons n f t r
   ⇒ IsSymbol n
-  ⇒ Dissect p q
-  ⇒ Plug p q
   ⇒ Proxy n
-  → p a
+  → f a
   → VariantF r a
-inj proxy value = coerceV $ VariantFRep
+inj proxy value = coerceV $ Internal.VariantFRep
   { tag: reflectSymbol proxy
   , value
-  , map
-  , bimap
-  , right
-  , plug
   }
   where
-  coerceV ∷ VariantFRep p q a → VariantF r a
+  coerceV ∷ Internal.VariantFRep f a → VariantF r a
   coerceV = unsafeCoerce
 
--- | Combinator for pattern matching.
-case_ ∷ ∀ a b. VariantF () a → b
-case_ v = unsafeCrashWith case unsafeCoerce v of
-  VariantFRep w → "Data.Functor.Polynomial.Extra: pattern match failed in tag [" <> w.tag <> "]."
+newtype ClosedVariantF ∷ ∀ k. Row (k → Type) → k → Type
+newtype ClosedVariantF r a =
+  ClosedVariantF
+    { functors ∷ Object Internal.FunctorClass
+    , bifunctors ∷ Object Internal.BifunctorClass
+    , dissects ∷ Object Internal.DissectClass
+    , value ∷ VariantF r a
+    }
 
--- | Attempt to read a variant given a label, defaulting to a failure
--- | branch with the failing label removed.
-on
-  ∷ ∀ n r s p a b
-  . R.Cons n p s r
-  ⇒ IsSymbol n
-  ⇒ Proxy n
-  → (p a → b)
-  → (VariantF s a → b)
-  → VariantF r a
-  → b
-on p f g v =
-  case coerceV v of
-    VariantFRep w
-      | w.tag == reflectSymbol p → f w.value
-    _ →
-      g (coerceR v)
-  where
-  coerceV ∷ VariantF _ _ → VariantFRep _ _ _
-  coerceV = unsafeCoerce
+close
+  ∷ ∀ r s a
+  . Internal.DissectRow r s
+  ⇒ Internal.SearchFunctor r
+  ⇒ Internal.SearchBifunctor s
+  ⇒ Internal.SearchDissect r
+  ⇒ VariantF r a
+  → ClosedVariantF r a
+close value =
+  let
+    functors = Internal.functors (Proxy ∷ _ r)
+    bifunctors = Internal.bifunctors (Proxy ∷ _ s)
+    dissects = Internal.dissects (Proxy ∷ _ r)
+  in
+    ClosedVariantF
+      { functors
+      , bifunctors
+      , dissects
+      , value
+      }
 
-  coerceR ∷ VariantF r _ → VariantF s _
-  coerceR = unsafeCoerce
-
-instance Functor (VariantF r) where
-  map f v =
-    case coerceV v of
-      VariantFRep w → coerceR $ VariantFRep
-        { tag: w.tag
-        , value: w.map f w.value
-        , map: w.map
-        , bimap: w.bimap
-        , right: w.right
-        , plug: w.plug
-        }
-
-    where
-    coerceV ∷ VariantF _ _ → VariantFRep _ _ _
-    coerceV = unsafeCoerce
-
-    coerceR ∷ VariantFRep _ _ _ → VariantF _ _
-    coerceR = unsafeCoerce
-
-data VariantF_2 ∷ Row (Type → Type → Type) → Type → Type → Type
+data VariantF_2 ∷ ∀ k l. Row (k → l → Type) → k → l → Type
 data VariantF_2 r a b
 
 inj_2
-  ∷ ∀ n p q t r a b
-  . Functor p
-  ⇒ Bifunctor q
-  ⇒ R.Cons n q t r
+  ∷ ∀ n f t r a b
+  . Cons n f t r
   ⇒ IsSymbol n
-  ⇒ Dissect p q
-  ⇒ Plug p q
   ⇒ Proxy n
-  → q a b
+  → f a b
   → VariantF_2 r a b
-inj_2 proxy value = coerceV $ VariantFRep_2
+inj_2 proxy value = coerceV $ Internal.VariantFRep_2
   { tag: reflectSymbol proxy
   , value
-  , map
-  , bimap
-  , right
-  , plug
   }
   where
-  coerceV ∷ VariantFRep_2 p q a b → VariantF_2 r a b
+  coerceV ∷ Internal.VariantFRep_2 f a b → VariantF_2 r a b
   coerceV = unsafeCoerce
 
-instance Bifunctor (VariantF_2 r) where
-  bimap f g v =
-    case coerceV v of
-      VariantFRep_2 w →
-        coerceW $ VariantFRep_2
-          { tag: w.tag
-          , value: w.bimap f g w.value
-          , map: w.map
-          , bimap: w.bimap
-          , right: w.right
-          , plug: w.plug
-          }
+newtype ClosedVariantF_2 ∷ ∀ k l. Row (k → l → Type) → k → l → Type
+newtype ClosedVariantF_2 r a b =
+  ClosedVariantF_2
+    { functors ∷ Object Internal.FunctorClass
+    , bifunctors ∷ Object Internal.BifunctorClass
+    , dissects ∷ Object Internal.DissectClass
+    , value ∷ VariantF_2 r a b
+    }
+
+instance Functor (ClosedVariantF r) where
+  map f (ClosedVariantF closed@{ functors, value }) =
+    let
+      (Internal.VariantFRep v) = coerceR value
+    in
+      case lookup v.tag functors of
+        Just functor →
+          let
+            outer = coerceV $ Internal.VariantFRep (v { value = functor.map f v.value })
+          in
+            ClosedVariantF (closed { value = outer })
+        Nothing →
+          unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Functor.map"
     where
-    coerceV ∷ VariantF_2 _ _ _ → VariantFRep_2 _ _ _ _
+    coerceV ∷ Internal.VariantFRep _ _ → VariantF _ _
     coerceV = unsafeCoerce
 
-    coerceW ∷ VariantFRep_2 _ _ _ _ → VariantF_2 _ _ _
-    coerceW = unsafeCoerce
+    coerceR ∷ VariantF _ _ → Internal.VariantFRep _ _
+    coerceR = unsafeCoerce
 
-class DissectRow ∷ RL.RowList (Type → Type) → RL.RowList (Type → Type → Type) → Constraint
-class DissectRow r s | r → s
-
-instance DissectRow RL.Nil RL.Nil
-
-else instance (DissectRow r s, Dissect p q) ⇒ DissectRow (RL.Cons n p r) (RL.Cons n q s)
-
-instance
-  ( RL.RowToList r r'
-  , DissectRow r' s'
-  , RL.ListToRow s' s
-  ) ⇒
-  Dissect (VariantF r) (VariantF_2 s) where
-  -- This is a lot more intuitive than it looks, but this is essentially
-  -- just taking the internal value, dissecting that, and then wrapping
-  -- it back to the appropriate type, much like `Sum`, but a lot more
-  -- messy and `unsafeCoerce`-ey.
-  right x =
-    case x of
-      Left w →
-        let
-          (VariantFRep w') = coerceW w
-        in
-          mind w' (w'.right (Left w'.value))
-      Right (Tuple w_2 c) →
-        let
-          (VariantFRep_2 w_2') = coerceW_2 w_2
-        in
-          mind w_2' (w_2'.right (Right (Tuple w_2'.value c)))
-    where
-    coerceW ∷ VariantF _ _ → VariantFRep _ _ _
-    coerceW = unsafeCoerce
-
-    coerceW_2 ∷ VariantF_2 _ _ _ → VariantFRep_2 _ _ _ _
-    coerceW_2 = unsafeCoerce
-
-    coerceI_2 ∷ _ → VariantF_2 _ _ _
-    coerceI_2 = unsafeCoerce
-
-    coerceI ∷ _ → VariantF _ _
-    coerceI = unsafeCoerce
-
-    mind w (Left (Tuple j v)) =
-      Left (Tuple j (coerceI_2 (w { value = v })))
-    mind w (Right d) =
-      Right (coerceI (w { value = d }))
-
-class PlugRow ∷ RL.RowList (Type → Type) → RL.RowList (Type → Type → Type) → Constraint
-class PlugRow r s | r → s
-
-instance PlugRow RL.Nil RL.Nil
-
-else instance (PlugRow r s, Plug p q) ⇒ PlugRow (RL.Cons n p r) (RL.Cons n q s)
-
-instance
-  ( RL.RowToList r r'
-  , DissectRow r' s'
-  , PlugRow r' s'
-  , RL.ListToRow s' s
-  ) ⇒
-  Plug (VariantF r) (VariantF_2 s) where
-  plug x v =
+instance Bifunctor (ClosedVariantF_2 r) where
+  bimap f g (ClosedVariantF_2 closed@{ bifunctors, value }) =
     let
-      (VariantFRep_2 w) = coerceW_2 v
+      (Internal.VariantFRep_2 v) = coerceR value
     in
-      coerceI (w { value = w.plug x w.value })
+      case lookup v.tag bifunctors of
+        Just bifunctor →
+          let
+            outer = coerceV $ Internal.VariantFRep_2 (v { value = bifunctor.bimap f g v.value })
+          in
+            ClosedVariantF_2 (closed { value = outer })
+        Nothing →
+          unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Bifunctor.bimap"
     where
-    coerceW_2 ∷ VariantF_2 _ _ _ → VariantFRep_2 _ _ _ _
-    coerceW_2 = unsafeCoerce
+    coerceV ∷ Internal.VariantFRep_2 _ _ _ → VariantF_2 _ _ _
+    coerceV = unsafeCoerce
 
-    coerceI ∷ _ → VariantF _ _
-    coerceI = unsafeCoerce
+    coerceR ∷ VariantF_2 _ _ _ → Internal.VariantFRep_2 _ _ _
+    coerceR = unsafeCoerce
+
+instance
+  Internal.DissectRow r s ⇒
+  Dissect (ClosedVariantF r) (ClosedVariantF_2 s) where
+  right = case _ of
+    Left (ClosedVariantF closed@{ dissects, value: x }) →
+      let
+        (Internal.VariantFRep v) = coerceR x
+      in
+        case lookup v.tag dissects of
+          Just dissect → case dissect.right (Left v.value) of
+            Left (Tuple j inner) →
+              let
+                outer = coerceV_2 (v { value = inner })
+              in
+                Left (Tuple j (ClosedVariantF_2 (closed { value = outer })))
+            Right inner →
+              let
+                outer = coerceV (v { value = inner })
+              in
+                Right (ClosedVariantF (closed { value = outer }))
+          Nothing →
+            unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Dissect.right"
+    Right (Tuple (ClosedVariantF_2 closed@{ dissects, value: x }) c) →
+      let
+        (Internal.VariantFRep_2 v) = coerceR_2 x
+      in
+        case lookup v.tag dissects of
+          Just dissect → case dissect.right (Right (Tuple v.value c)) of
+            Left (Tuple j inner) →
+              let
+                outer = coerceV_2 (v { value = inner })
+              in
+                Left (Tuple j (ClosedVariantF_2 (closed { value = outer })))
+            Right inner →
+              let
+                outer = coerceV (v { value = inner })
+              in
+                Right (ClosedVariantF (closed { value = outer }))
+          Nothing →
+            unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Dissect.right"
+    where
+    coerceR ∷ VariantF _ _ → Internal.VariantFRep _ _
+    coerceR = unsafeCoerce
+
+    coerceR_2 ∷ VariantF_2 _ _ _ → Internal.VariantFRep_2 _ _ _
+    coerceR_2 = unsafeCoerce
+
+    coerceV ∷ _ → VariantF _ _
+    coerceV = unsafeCoerce
+
+    coerceV_2 ∷ _ → VariantF_2 _ _ _
+    coerceV_2 = unsafeCoerce
+
+convert :: forall r a. ClosedVariantF r a -> Variant.VariantF r a
+convert (ClosedVariantF { functors, value }) =
+  let
+    (Internal.VariantFRep internals) = unsafeCoerce value
+  in
+    case lookup internals.tag functors of
+      Just functor -> unsafeCoerce
+        { "type": internals.tag
+        , value: internals.value
+        , map: functor.map
+        }
+      Nothing ->
+        unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.convert"
+
+unsafeOnMatch
+  ∷ ∀ rl r r1 r2 r3 a b
+  . RL.RowToList r rl
+  ⇒ Variant.VariantFMatchCases rl r1 a b
+  ⇒ R.Union r1 r2 r3
+  ⇒ Record r
+  → (ClosedVariantF r2 a → b)
+  → ClosedVariantF r3 a
+  → b
+unsafeOnMatch a b c = Variant.onMatch a (b <<< unsafeConvertFrom) (unsafeConvertTo c)
+  where
+  unsafeConvertTo :: forall r' a'. ClosedVariantF r' a' -> Variant.VariantF r' a'
+  unsafeConvertTo (ClosedVariantF { value }) =
+    let
+      (Internal.VariantFRep internals) = unsafeCoerce value
+    in
+      unsafeCoerce { "type": internals.tag, value: internals.value }
+
+  unsafeConvertFrom :: forall r' a'. Variant.VariantF r' a' -> ClosedVariantF r' a'
+  unsafeConvertFrom value =
+    let
+      internals = unsafeCoerce value
+    in
+      unsafeCoerce { value: { tag: internals."type", value: internals.value } }
+
+unsafeMatch
+  ∷ ∀ rl r r1 r3 a b
+  . RL.RowToList r rl
+  ⇒ Variant.VariantFMatchCases rl r1 a b
+  ⇒ R.Union r1 () r3
+  ⇒ Record r
+  → ClosedVariantF r3 a
+  → b
+unsafeMatch a c =
+  unsafeOnMatch a (\_ -> unsafeCrashWith "Pattern match failed.") c
