@@ -9,7 +9,7 @@ import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
 import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial (Const(..), Id(..), Product(..))
-import Data.Functor.Polynomial.Variant (ClosedVariantF(..), VariantF, close, convert, inj, unsafeMatch, unsafeOnMatch)
+import Data.Functor.Polynomial.Variant (VariantF(..), PreVariantF, instantiate, convert, inj, match, onMatch)
 import Data.Functor.Variant as Variant
 import Data.List (List(..), (:))
 import Data.Map as M
@@ -31,14 +31,14 @@ type Example f r = f (a :: Id | r) Unit
 -- whether or not it implements a `Functor` instance. This makes
 -- deeper composition much, much easier than say, enforcing said
 -- `Functor` instance instantly.
-openVariantF :: forall r. Example VariantF r
+openVariantF :: forall r. Example PreVariantF r
 openVariantF = inj (Proxy :: _ "a") (Id unit)
 
 -- A closed variant is any open variant that has `Functor`, `Bifunctor`,
 -- and `Dissect` instances. An unsafe routine is used internally to
 -- capture the instance methods onto the closed variant.
-closedVariantF :: Example ClosedVariantF ()
-closedVariantF = close openVariantF
+closedVariantF :: Example VariantF ()
+closedVariantF = instantiate openVariantF
 
 -- Any closed variant can be converted into a vanilla variant for
 -- compatibility. If you're only interested in pattern matching,
@@ -55,8 +55,8 @@ onMatchExample = vanillaVariantF # Variant.onMatch
   (\_ -> unsafeCrashWith "Pattern match failed!")
 
 -- Alternatively, convenience wrappers are also provided:
-unsafeOnMatchExample :: Unit
-unsafeOnMatchExample = closedVariantF # unsafeOnMatch
+onMatchExample' :: Unit
+onMatchExample' = closedVariantF # onMatch
   { a: \(Id u) -> u
   }
   (\_ -> unit)
@@ -87,7 +87,7 @@ unrecurseV :: forall i a t r. R.Cons i a t r => Recurse i (V.Variant r) -> a
 unrecurseV variant = (unsafeCoerce variant).value
 
 newtype Tagged :: Symbol -> Row (Type -> Type) -> Type
-newtype Tagged t r = Tagged (Mu (ClosedVariantF r))
+newtype Tagged t r = Tagged (Mu (VariantF r))
 
 derive instance Newtype (Tagged t r) _
 
@@ -102,7 +102,7 @@ type ExprR =
   )
 
 type ExprF :: Type -> Type
-type ExprF = ClosedVariantF ExprR
+type ExprF = VariantF ExprR
 
 type BindR :: Row (Type -> Type)
 type BindR =
@@ -110,7 +110,7 @@ type BindR =
   )
 
 type BindF :: Type -> Type
-type BindF = ClosedVariantF BindR
+type BindF = VariantF BindR
 
 type UnivR =
   ( expr :: ExprF
@@ -140,31 +140,31 @@ bind_ a (Tagged (In b)) = coerce (closeBind' $ closeBind (Product (Const a) (rec
 closeExpr :: forall a. ExprF a -> UnivF "ExprF"
 closeExpr a = coerce (close' (inj (Proxy :: _ "expr") a))
   where
-  close' :: _ -> ClosedVariantF UnivR a
-  close' = close
+  close' :: _ -> VariantF UnivR a
+  close' = instantiate
 
 closeBind' :: forall a. BindF a -> UnivF "BindF"
 closeBind' a = coerce (close' (inj (Proxy :: _ "bind") a))
   where
-  close' :: _ -> ClosedVariantF UnivR a
-  close' = close
+  close' :: _ -> VariantF UnivR a
+  close' = instantiate
 
 closeLit :: forall a. Const Int a -> ExprF a
-closeLit = close <<< inj (Proxy :: _ "lit")
+closeLit = instantiate <<< inj (Proxy :: _ "lit")
 
 closeVar :: forall a. Const String a -> ExprF a
-closeVar = close <<< inj (Proxy :: _ "var")
+closeVar = instantiate <<< inj (Proxy :: _ "var")
 
 closeAdd :: forall a. Product (Recurse "ExprF") (Recurse "ExprF") a -> ExprF a
-closeAdd = close <<< inj (Proxy :: _ "add")
+closeAdd = instantiate <<< inj (Proxy :: _ "add")
 
 closeLet :: forall a. Product (Recurse "BindF") (Recurse "ExprF") a -> ExprF a
-closeLet = close <<< inj (Proxy :: _ "let")
+closeLet = instantiate <<< inj (Proxy :: _ "let")
 
 closeBind :: forall a. Product (Const String) (Recurse "ExprF") a -> BindF a
-closeBind = close <<< inj (Proxy :: _ "bind")
+closeBind = instantiate <<< inj (Proxy :: _ "bind")
 
-program :: Mu (ClosedVariantF UnivR)
+program :: Mu (VariantF UnivR)
 program = coerce $ let_ (bind_ "a" (lit 21)) (let_ (bind_ "b" (lit 21)) (add_ (var "a") (var "b")))
 
 eval :: V.Variant ("ExprF" :: Maybe Int, "BindF" :: Unit)
@@ -172,8 +172,8 @@ eval = run do
   r <- STRef.new M.empty
 
   let
-    go = unsafeMatch
-      { expr: unsafeMatch
+    go = match
+      { expr: match
           { lit: \(Const i) ->
               pure $ rExprF $ Just i
           , var: \(Const v) -> do
@@ -184,7 +184,7 @@ eval = run do
           , "let": \(Product _ b) ->
               pure $ rExprF $ unrecurseV b
           }
-      , bind: unsafeMatch
+      , bind: match
           { bind: \(Product (Const n) v) -> do
               _ <- STRef.modify (M.insert n (unrecurseV v)) r
               pure $ rBindF unit
@@ -253,7 +253,7 @@ type IceCreamR r =
   )
 
 type IceCreamV :: Row (Type -> Type) -> Type -> Type
-type IceCreamV r = VariantF (IceCreamR r)
+type IceCreamV r = PreVariantF (IceCreamR r)
 
 vanilla :: forall r a. Scoops -> IceCreamV r a
 vanilla scoops = inj (Proxy :: _ "vanilla") (Const scoops)
@@ -265,10 +265,10 @@ chocolate scoops = inj (Proxy :: _ "chocolate") (Const scoops)
 -- "close" the type.
 
 type IceCreamC :: Type -> Type
-type IceCreamC = ClosedVariantF (IceCreamR ())
+type IceCreamC = VariantF (IceCreamR ())
 
 closeIceCream :: forall a. IceCreamV () a -> IceCreamC a
-closeIceCream = close
+closeIceCream = instantiate
 
 vanillaServing :: forall a. IceCreamC a
 vanillaServing = closeIceCream $ vanilla 3
@@ -281,17 +281,17 @@ chocolateServing = closeIceCream $ chocolate 3
 
 type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
 
-type IceCreamV' r = VariantF (IceCreamR' r)
+type IceCreamV' r = PreVariantF (IceCreamR' r)
 
 strawberry :: forall r a. Scoops -> IceCreamV' r a
 strawberry scoops = inj (Proxy :: _ "strawberry") (Const scoops)
 
 -- And close them once we're done.
 
-type IceCreamC' = ClosedVariantF (IceCreamR' ())
+type IceCreamC' = VariantF (IceCreamR' ())
 
 closeIceCream' :: forall a. IceCreamV' () a -> IceCreamC' a
-closeIceCream' = close
+closeIceCream' = instantiate
 
 strawberryServing :: forall a. IceCreamC' a
 strawberryServing = closeIceCream' $ strawberry 3
