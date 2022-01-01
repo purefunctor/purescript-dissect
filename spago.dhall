@@ -2,6 +2,7 @@
 , dependencies =
   [ "bifunctors"
   , "console"
+  , "effect"
   , "either"
   , "fixed-points"
   , "foreign-object"
@@ -13,8 +14,8 @@
   , "partial"
   , "prelude"
   , "safe-coerce"
+  , "st"
   , "tailrec"
-  , "transformers"
   , "tuples"
   , "typelevel-prelude"
   , "unsafe-coerce"

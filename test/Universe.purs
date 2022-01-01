@@ -1,28 +1,214 @@
-module Test.Universe where
+module Test.Universe2 where
 
 import Prelude hiding (one)
 
+import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM2)
+import Control.Monad.ST (run)
+import Control.Monad.ST.Internal as STRef
 import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
 import Data.Functor.Mu (Mu(..))
-import Data.Functor.Polynomial (Const(..), Product(..), (:*:))
-import Data.Functor.Polynomial.Variant (VariantF, inj)
-import Data.Functor.Polynomial.Variant as V
+import Data.Functor.Polynomial (Const(..), Id(..), Product(..))
+import Data.Functor.Polynomial.Variant (ClosedVariantF(..), VariantF, close, convert, inj, unsafeMatch, unsafeOnMatch)
+import Data.Functor.Variant as Variant
 import Data.List (List(..), (:))
+import Data.Map as M
+import Data.Maybe (Maybe(..))
+import Data.Newtype (class Newtype)
 import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, class Plug, right)
-import Type.Prelude (Proxy(..), class IsSymbol, reflectSymbol)
+import Data.Variant as V
+import Dissect.Class (class Dissect, right)
+import Partial.Unsafe (unsafeCrashWith)
+import Safe.Coerce (coerce)
+import Type.Prelude (Proxy(..))
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
-import Partial.Unsafe (unsafeCrashWith)
 
--- Stolen from purescript-ssrs
-cata ∷ ∀ p q v. Dissect p q ⇒ (p v → v) → Mu p → v
-cata algebra (In pt) = go (right (Left pt)) Nil
+type Example :: (Row (Type -> Type) -> Type -> Type) -> Row (Type -> Type) -> Type
+type Example f r = f (a :: Id | r) Unit
+
+-- An open variant allows any `* -> *`-kinded type to be injected
+-- whether or not it implements a `Functor` instance. This makes
+-- deeper composition much, much easier than say, enforcing said
+-- `Functor` instance instantly.
+openVariantF :: forall r. Example VariantF r
+openVariantF = inj (Proxy :: _ "a") (Id unit)
+
+-- A closed variant is any open variant that has `Functor`, `Bifunctor`,
+-- and `Dissect` instances. An unsafe routine is used internally to
+-- capture the instance methods onto the closed variant.
+closedVariantF :: Example ClosedVariantF ()
+closedVariantF = close openVariantF
+
+-- Any closed variant can be converted into a vanilla variant for
+-- compatibility. If you're only interested in pattern matching,
+-- a wrapper for `onMatch` is also provided.
+vanillaVariantF :: Example Variant.VariantF ()
+vanillaVariantF = convert closedVariantF
+
+-- And can be then used for operations like onMatch with relative
+-- ease.
+onMatchExample :: Unit
+onMatchExample = vanillaVariantF # Variant.onMatch
+  { a: \(Id u) -> u
+  }
+  (\_ -> unsafeCrashWith "Pattern match failed!")
+
+-- Alternatively, convenience wrappers are also provided:
+unsafeOnMatchExample :: Unit
+unsafeOnMatchExample = closedVariantF # unsafeOnMatch
+  { a: \(Id u) -> u
+  } (\_ -> unit)
+
+--
+
+newtype Recurse ∷ Symbol → Type → Type
+newtype Recurse i a = Recurse a
+
+instance Functor (Recurse i) where
+  map f (Recurse x) = Recurse (f x)
+
+recurse ∷ ∀ i a. Proxy i → a → Recurse i a
+recurse _ = Recurse
+
+data Recurse_2 ∷ ∀ k l. Symbol → k → l → Type
+data Recurse_2 i a b = Recurse_2
+
+instance Bifunctor (Recurse_2 i) where
+  bimap _ _ _ = Recurse_2
+
+instance Dissect (Recurse i) (Recurse_2 i) where
+  right = case _ of
+    Left g → Left (Tuple (unsafeCoerce g) Recurse_2)
+    Right (Tuple _ c) → Right (unsafeCoerce c)
+
+unrecurseV :: forall i a t r. R.Cons i a t r ⇒ Recurse i (V.Variant r) → a
+unrecurseV variant = (unsafeCoerce variant).value
+
+newtype Tagged :: Symbol -> Row (Type -> Type) -> Type
+newtype Tagged t r = Tagged (Mu (ClosedVariantF r))
+
+derive instance Newtype (Tagged t r) _
+
+--
+
+type ExprR :: Row (Type -> Type)
+type ExprR =
+  ( lit :: Const Int
+  , var :: Const String
+  , add :: Product (Recurse "ExprF") (Recurse "ExprF")
+  , "let" :: Product (Recurse "BindF") (Recurse "ExprF")
+  )
+
+type ExprF :: Type -> Type
+type ExprF = ClosedVariantF ExprR
+
+type BindR :: Row (Type -> Type)
+type BindR =
+  ( bind :: Product (Const String) (Recurse "ExprF")
+  )
+
+type BindF :: Type -> Type
+type BindF = ClosedVariantF BindR
+
+type UnivR =
+  ( expr :: ExprF
+  , bind :: BindF
+  )
+
+type UnivF :: Symbol -> Type
+type UnivF t = Tagged t UnivR
+
+lit :: Int -> UnivF "ExprF"
+lit a = coerce (closeExpr $ closeLit (Const a))
+
+var :: String -> UnivF "ExprF"
+var a = coerce (closeExpr $ closeVar (Const a))
+
+add_ :: UnivF "ExprF" -> UnivF "ExprF" -> UnivF "ExprF"
+add_ (Tagged (In a)) (Tagged (In b)) = coerce (closeExpr (closeAdd (Product (recurse Proxy a) (recurse Proxy b))))
+
+let_ :: UnivF "BindF" -> UnivF "ExprF" -> UnivF "ExprF"
+let_ (Tagged (In a)) (Tagged (In b)) = coerce (closeExpr (closeLet (Product (recurse Proxy a) (recurse Proxy b))))
+
+bind_ :: String -> UnivF "ExprF" -> UnivF "BindF"
+bind_ a (Tagged (In b)) = coerce (closeBind' $ closeBind (Product (Const a) (recurse Proxy b)))
+
+closeExpr :: forall a. ExprF a -> UnivF "ExprF"
+closeExpr a = coerce (close' (inj (Proxy :: _ "expr") a))
   where
+  close' :: _ -> ClosedVariantF UnivR a
+  close' = close
+
+closeBind' :: forall a. BindF a -> UnivF "BindF"
+closeBind' a = coerce (close' (inj (Proxy :: _ "bind") a))
+  where
+  close' :: _ -> ClosedVariantF UnivR a
+  close' = close
+
+closeLit :: forall a. Const Int a -> ExprF a
+closeLit = close <<< inj (Proxy :: _ "lit")
+
+closeVar :: forall a. Const String a -> ExprF a
+closeVar = close <<< inj (Proxy :: _ "var")
+
+closeAdd :: forall a. Product (Recurse "ExprF") (Recurse "ExprF") a -> ExprF a
+closeAdd = close <<< inj (Proxy :: _ "add")
+
+closeLet :: forall a. Product (Recurse "BindF") (Recurse "ExprF") a -> ExprF a
+closeLet = close <<< inj (Proxy :: _ "let")
+
+closeBind :: forall a. Product (Const String) (Recurse "ExprF") a -> BindF a
+closeBind = close <<< inj (Proxy :: _ "bind")
+
+program :: Mu (ClosedVariantF UnivR)
+program = coerce $ let_ (bind_ "a" (lit 21)) (let_ (bind_ "b" (lit 21)) (add_ (var "a") (var "b")))
+
+eval :: V.Variant ("ExprF" :: Maybe Int, "BindF" :: Unit)
+eval = run do
+  r <- STRef.new M.empty
+
+  let go = unsafeMatch
+        { expr: unsafeMatch
+          { lit: \(Const i) ->
+              pure $ rExprF $ Just i
+          , var: \(Const v) -> do
+              m <- STRef.read r
+              pure $ rExprF $ join $ M.lookup v m
+          , add: \(Product a b) ->
+              pure $ rExprF $ add <$> unrecurseV a <*> unrecurseV b
+          , "let": \(Product _ b) ->
+              pure $ rExprF $ unrecurseV b
+          }
+        , bind: unsafeMatch
+          { bind: \(Product (Const n) v) -> do
+              _ <- STRef.modify (M.insert n (unrecurseV v)) r
+              pure $ rBindF unit
+          }
+        }
+
+  cataM right go program
+  where
+  rExprF = V.inj (Proxy :: _ "ExprF")
+  rBindF = V.inj (Proxy :: _ "BindF")
+
+--
+
+type Algebra f a = f a → a
+
+type AlgebraM ∷ (Type → Type) → (Type → Type) → Type → Type
+type AlgebraM m f a = f a → m a
+
+type RightFnA ∷ (Type → Type) → (Type → Type → Type) → Type → Type
+type RightFnA p q v = Either (p (Mu p)) (Tuple (q v (Mu p)) v) → Either (Tuple (Mu p) (q v (Mu p))) (p v)
+
+cata ∷ ∀ p q v. RightFnA p q v → Algebra p v → Mu p → v
+cata right algebra (In pt) = go (right (Left pt)) Nil
+  where
+  go ∷ Either (Tuple (Mu p) (q v (Mu p))) (p v) → List (q v (Mu p)) → v
   go index stack =
     case index of
-      Left (Tuple (In pt') pd) →
+      Left (Tuple (In pt') pd) → do
         go (right (Left pt')) (pd : stack)
       Right pv →
         case stack of
@@ -31,246 +217,17 @@ cata algebra (In pt) = go (right (Left pt)) Nil
           Nil →
             algebra pv
 
-ana ∷ ∀ p q v. Dissect p q ⇒ (v → p v) → v → Mu p
-ana coalgebra seed = go (right (Left (coalgebra seed))) Nil
+cataM ∷ ∀ m p q v. MonadRec m ⇒ RightFnA p q v → AlgebraM m p v → Mu p → m v
+cataM right algebraM (In pt) = tailRecM2 go (right (Left pt)) Nil
   where
   go index stack =
     case index of
-      Left (Tuple pt pd) →
-        go (right (Left (coalgebra pt))) (pd : stack)
+      Left (Tuple (In pt') pd) →
+        pure (Loop { a: right (Left pt'), b: (pd : stack) })
       Right pv →
         case stack of
-          (pd : stk) →
-            go (right (Right (Tuple pd (In pv)))) stk
-          Nil →
-            In pv
-
-hylo ∷ ∀ p q v w. Dissect p q ⇒ (p v → v) → (w → p w) → w → v
-hylo algebra coalgebra seed = go (right (Left (coalgebra seed))) Nil
-  where
-  go index stack =
-    case index of
-      Left (Tuple pt pd) →
-        go (right (Left (coalgebra pt))) (pd : stack)
-      Right pv →
-        case stack of
-          (pd : stk) →
-            go (right (Right (Tuple pd (algebra pv)))) stk
-          Nil →
-            algebra pv
-
--- Similar to `Id`, but indexed with a symbol.
-data Guarded ∷ ∀ k. Symbol → k → Type
-data Guarded i a
-
-instance Functor (Guarded i) where
-  map f x = unsafeCoerce (f (unsafeCoerce x))
-
-guard ∷ ∀ i a n. Proxy i → a → Guarded i n
-guard _ = unsafeCoerce
-
-data Guarded_2 ∷ ∀ k l. Symbol → k → l → Type
-data Guarded_2 i a b = Guarded_2
-
-instance Bifunctor (Guarded_2 i) where
-  bimap _ _ _ = Guarded_2
-
-instance Dissect (Guarded i) (Guarded_2 i) where
-  right = case _ of
-    Left g → Left (Tuple (unsafeCoerce g) Guarded_2)
-    Right (Tuple _ c) → Right (unsafeCoerce c)
-
-instance Plug (Guarded i) (Guarded_2 i) where
-  plug x _ = unsafeCoerce x
-
--- A weaker variant, works in conjunction with Guarded.
-data Select ∷ ∀ k. Row k → Type
-data Select r
-
-case_ ∷ ∀ a. Select () → a
-case_ v = unsafeCrashWith case unsafeCoerce v of
-  w → "Test.Universe: pattern match failed in tag [" <> w.tag <> "]."
-
-on
-  ∷ ∀ n r s a b
-  . R.Cons n a s r
-  ⇒ IsSymbol n
-  ⇒ Proxy n
-  → (a → b)
-  → (Select s → b)
-  → Select r
-  → b
-on p f g v =
-  let
-    w = unsafeCoerce v
-  in
-    if w.tag == reflectSymbol p then f w.value
-    else g (unsafeCoerce v)
-
-toS ∷ ∀ i a t r. R.Cons i a t r ⇒ IsSymbol i ⇒ Proxy i → a → (Select r)
-toS p value = unsafeCoerce { tag: reflectSymbol p, value }
-
-unS ∷ ∀ i a t r. R.Cons i a t r ⇒ Guarded i (Select r) → a
-unS v = (unsafeCoerce v).value
-
-toG ∷ ∀ i a t r. R.Cons i a t r ⇒ IsSymbol i ⇒ Proxy i → a → Guarded i (Select r)
-toG p value = unsafeCoerce (toS p value ∷ Select r)
-
--- 1st Type - one point of recursion
---
--- data Base = One | Many (List Base)
-type BaseF ∷ ∀ k. k → Type
-type BaseF = VariantF
-  ( one ∷ Const Unit
-  , many ∷ Guarded "list"
-  )
-
--- 2nd Type - two points of recursion
---
--- data List = Nil | Cons Base List
-type ListF ∷ ∀ k. k → Type
-type ListF = VariantF
-  ( nil ∷ Const Unit
-  , cons ∷ Product (Guarded "base") (Guarded "list")
-  )
-
--- universe type
---
--- This holds all mutually recursive types together. Since `VariantF`
--- can be extended, it's possible to parameterize this to add more
--- constructors to each type or add more types to the universe.
---
--- Unfortunately, because of how `inj` works, it's impossible to infer
--- open rows. Right now, the only workaround possible is to make
--- constructors for a specific universe as described below.
-type UnivF ∷ ∀ k. k → Type
-type UnivF = VariantF
-  ( base ∷ BaseF
-  , list ∷ ListF
-  )
-
-type Univ = Mu UnivF
-
--- extensible constructors
---
--- These don't rely on a universe in any way, since they simply
--- construct types that may occupy it. Think of these as the building
--- blocks for an extensible universe.
-
-one_ ∷ ∀ n. BaseF n
-one_ = inj _one (Const unit)
-
-many_ ∷ ∀ a n. a → BaseF n
-many_ n = inj _many (guard _list n)
-
-nil_ ∷ ∀ n. ListF n
-nil_ = inj _nil (Const unit)
-
-cons_ ∷ ∀ a b n. a → b → ListF n
-cons_ n m = inj _cons (Product (guard _base n) (guard _list m))
-
--- universe constructors
---
--- These "lift" the extensible constructors into a pre-defined universe
--- of types. However, this adds the cost of the constructors being fully
--- dynamic. One solution for API authors is to make use of `Guarded` in
--- order to add type labels that can be matched against.
-
-one ∷ Univ
-one = In (inj _base one_)
-
-many ∷ Univ → Univ
-many n = In (inj _base (many_ n))
-
-nil ∷ Univ
-nil = In (inj _list nil_)
-
-cons ∷ Univ → Univ → Univ
-cons n m = unsafeCoerce $ In (inj _list (cons_ n m))
-
-xs ∷ Univ
-xs = many (cons one (cons one (cons one nil)))
-
--- Recursion Schemes
-
-al ∷ Univ → Select (base ∷ Int, list ∷ Int)
-al = cata go
-  where
-  go = V.case_
-    # V.on _base goBase
-    # V.on _list goList
-    where
-    goBase = V.case_
-      # V.on _one (\_ → toS _base 0)
-      # V.on _many (\n → toS _base (unS n))
-
-    goList = V.case_
-      # V.on _nil (\_ → toS _list 0)
-      # V.on _cons (\(_ :*: r) → toS _list (1 + unS r))
-
-co ∷ Select (base ∷ Int, list ∷ Int) → Univ
-co = ana go
-  where
-  go = case_
-    # on _base
-        ( case _ of
-            0 → injBase one_
-            n → injBase (many_ (toG _list n))
-        )
-    # on _list
-        ( case _ of
-            0 → injList nil_
-            n → injList (cons_ (toG _base 0) (toG _list (n - 1)))
-        )
-    where
-    injBase = inj _base
-    injList = inj _list
-
-hy ∷ Select (base ∷ Int, list ∷ Int) → Select (base ∷ Int, list ∷ Int)
-hy = hylo goAl goCo
-  where
-  goAl = V.case_
-    # V.on _base goBase
-    # V.on _list goList
-    where
-    goBase = V.case_
-      # V.on _one (\_ → toS _base 0)
-      # V.on _many (\n → toS _base (unS n))
-
-    goList = V.case_
-      # V.on _nil (\_ → toS _list 0)
-      # V.on _cons (\(_ :*: r) → toS _list (1 + unS r))
-
-  goCo = case_
-    # on _base
-        ( case _ of
-            0 → injBase one_
-            n → injBase (many_ (toG _list n))
-        )
-    # on _list
-        ( case _ of
-            0 → injList nil_
-            n → injList (cons_ (toG _base 0) (toG _list (n - 1)))
-        )
-    where
-    injBase = inj _base
-    injList = inj _list
-
--- Proxy Types
-_base ∷ Proxy "base"
-_base = Proxy
-
-_list ∷ Proxy "list"
-_list = Proxy
-
-_one ∷ Proxy "one"
-_one = Proxy
-
-_many ∷ Proxy "many"
-_many = Proxy
-
-_nil ∷ Proxy "nil"
-_nil = Proxy
-
-_cons ∷ Proxy "cons"
-_cons = Proxy
+          (pd : stk) → do
+            pv' ← algebraM pv
+            pure (Loop { a: right (Right (Tuple pd pv')), b: stk })
+          Nil → do
+            Done <$> algebraM pv
