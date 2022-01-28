@@ -18,11 +18,12 @@ import Data.Tuple (Tuple(..))
 import Data.Variant as V
 import Dissect.Class (class Dissect, right)
 import Partial.Unsafe (unsafeCrashWith)
+import Record.Polynomial (RecordF, from, to)
 import Safe.Coerce (coerce)
 import Type.Prelude (Proxy(..))
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
-import Variant.Polynomial (VariantF(..), OpenVariantF, instantiate, convert, inj, match, onMatch)
+import Variant.Polynomial (OpenVariantF, VariantF(..), convert, inj, instantiate, match, onMatch)
 
 type Example :: (Row (Type -> Type) -> Type -> Type) -> Row (Type -> Type) -> Type
 type Example f r = f (a :: Id | r) Unit
@@ -298,3 +299,51 @@ strawberryServing = closeIceCream' $ strawberry 3
 
 chocolateServing' :: forall a. IceCreamC' a
 chocolateServing' = closeIceCream' $ chocolate 3
+
+--
+
+type ConsR =
+  ( head :: Const Int, tail :: Id )
+
+type ConsR' a =
+  ( head :: Const Int a, tail :: Id a)
+
+type IntListV =
+  ( "nil" :: Const Unit
+  , "cons" :: RecordF ConsR
+  )
+
+-- type IntListV' a =
+--   ( "nil" :: Const Unit a
+--   , "cons" :: RecordF ( head :: Const Int, tail :: Id ) a
+--   )
+
+type IntListF = VariantF IntListV
+
+type IntList = Mu IntListF
+
+_nil :: IntList
+_nil = In (instantiate $ inj (Proxy :: _ "nil") (Const unit))
+
+_cons :: Int -> IntList -> IntList
+_cons =
+  let
+    consFrom :: Record (ConsR' IntList) -> RecordF ConsR IntList
+    consFrom = from
+
+    consInstantiate :: forall a. OpenVariantF IntListV a -> IntListF a
+    consInstantiate = instantiate
+  in
+    \h t -> In (consInstantiate $ inj (Proxy :: _ "cons") (consFrom { head: Const h, tail: Id t }))
+
+intListSum :: IntList -> Int
+intListSum = cata right go
+  where
+  go :: IntListF Int -> Int
+  go = match
+    { nil: \_ -> 0
+    , cons: to >>> \{ head: Const head, tail: Id tail } -> head + tail
+    }
+
+intListExample :: Int
+intListExample = intListSum (_cons 10 (_cons 11 (_cons 21 _nil)))
