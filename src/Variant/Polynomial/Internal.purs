@@ -40,12 +40,13 @@ type DissectClass =
 --   }
 
 class FindInstances (rl :: RowList (Type -> Type)) where
-  instances ::
-    Proxy rl -> { functors :: Object FunctorClass
-                , bifunctors :: Object BifunctorClass
-                , dissects :: Object DissectClass
-                -- , plugs :: Object PlugClass
-                }
+  instances
+    :: Proxy rl
+    -> { functors :: Object FunctorClass
+       , bifunctors :: Object BifunctorClass
+       , dissects :: Object DissectClass
+       -- , plugs :: Object PlugClass
+       }
 
 instance FindInstances Nil where
   instances _ =
@@ -55,7 +56,14 @@ instance FindInstances Nil where
     -- , plugs: empty
     }
 
-else instance (IsSymbol n, Functor f, Dissect f g, {- Plug f g, -} Bifunctor g, FindInstances rl) => FindInstances (Cons n f rl) where
+else instance
+  ( IsSymbol n
+  , Functor f
+  , Dissect f g
+  , {- Plug f g, -} Bifunctor g
+  , FindInstances rl
+  ) =>
+  FindInstances (Cons n f rl) where
   instances _ =
     let
       { functors, bifunctors, dissects } = instances (Proxy :: _ rl)

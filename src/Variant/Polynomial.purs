@@ -7,7 +7,6 @@ import Prelude
 
 import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
-import Variant.Polynomial.Internal as Internal
 import Data.Functor.Variant as Variant
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
@@ -19,6 +18,7 @@ import Prim.RowList as RL
 import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 import Type.Row (class Cons)
 import Unsafe.Coerce (unsafeCoerce)
+import Variant.Polynomial.Internal as Internal
 
 data PreVariantF :: forall k. Row (k -> Type) -> k -> Type
 data PreVariantF r a
@@ -234,30 +234,32 @@ match a c =
   onMatch a (\_ -> unsafeCrashWith "Data.Functor.Polynomial.Variant: pattern match failed") c
 
 -- | Combinator for pattern matching on `VariantF`.
-case_ ∷ ∀ a b. VariantF () a → b
+case_ :: forall a b. VariantF () a -> b
 case_ (VariantF { value }) = unsafeCrashWith case unsafeCoerce value of
-  Internal.VariantFRep w → "Data.Functor.Polynomial.Variant: pattern match failed in tag [" <> w.tag <> "]."
+  Internal.VariantFRep w -> "Data.Functor.Polynomial.Variant: pattern match failed in tag ["
+    <> w.tag
+    <> "]."
 
 -- | Match a `VariantF` on a specific label. If the match fails,
 -- | move to the failure callback with one less field.
 on
-  ∷ ∀ n r s p a b
-  . R.Cons n p s r
-  ⇒ IsSymbol n
-  ⇒ Proxy n
-  → (p a → b)
-  → (VariantF s a → b)
-  → VariantF r a
-  → b
+  :: forall n r s p a b
+   . R.Cons n p s r
+  => IsSymbol n
+  => Proxy n
+  -> (p a -> b)
+  -> (VariantF s a -> b)
+  -> VariantF r a
+  -> b
 on p f g v@(VariantF { value }) =
   case coerceV value of
     Internal.VariantFRep w
-      | w.tag == reflectSymbol p → f w.value
-    _ →
+      | w.tag == reflectSymbol p -> f w.value
+    _ ->
       g (coerceR v)
   where
-  coerceV ∷ PreVariantF _ _ → Internal.VariantFRep _ _
+  coerceV :: PreVariantF _ _ -> Internal.VariantFRep _ _
   coerceV = unsafeCoerce
 
-  coerceR ∷ VariantF r _ → VariantF s _
+  coerceR :: VariantF r _ -> VariantF s _
   coerceR = unsafeCoerce
