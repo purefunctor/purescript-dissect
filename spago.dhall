@@ -17,6 +17,7 @@
   , "st"
   , "tailrec"
   , "tuples"
+  , "type-equality"
   , "typelevel-prelude"
   , "unsafe-coerce"
   , "variant"
