@@ -80,18 +80,19 @@ newtype VariantF_2 r a b =
     }
 
 instance Functor (VariantF r) where
-  map f (VariantF closed@{ instances: { functors }, value }) =
+  map f (VariantF wrapper@{ instances, value }) =
     let
-      (Internal.OpenVariantFRep v) = coerceR value
+      (Internal.OpenVariantFRep internals) = coerceR value
     in
-      case lookup v.tag functors of
+      case lookup internals.tag instances.functors of
         Just functor ->
           let
-            outer = coerceV $ Internal.OpenVariantFRep (v { value = functor.map f v.value })
+            newValue = coerceV $ Internal.OpenVariantFRep
+              (internals { value = functor.map f internals.value })
           in
-            VariantF (closed { value = outer })
+            VariantF (wrapper { value = newValue })
         Nothing ->
-          unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Functor.map"
+          unsafeCrashWith "Pattern match failed at Variant.Polynomial.Functor.map"
     where
     coerceV :: Internal.OpenVariantFRep _ _ -> OpenVariantF _ _
     coerceV = unsafeCoerce
@@ -100,18 +101,19 @@ instance Functor (VariantF r) where
     coerceR = unsafeCoerce
 
 instance Bifunctor (VariantF_2 r) where
-  bimap f g (VariantF_2 closed@{ instances: { bifunctors }, value }) =
+  bimap f g (VariantF_2 wrapper@{ instances, value }) =
     let
-      (Internal.OpenVariantFRep_2 v) = coerceR value
+      (Internal.OpenVariantFRep_2 internals) = coerceR value
     in
-      case lookup v.tag bifunctors of
+      case lookup internals.tag instances.bifunctors of
         Just bifunctor ->
           let
-            outer = coerceV $ Internal.OpenVariantFRep_2 (v { value = bifunctor.bimap f g v.value })
+            newValue = coerceV $ Internal.OpenVariantFRep_2
+              (internals { value = bifunctor.bimap f g internals.value })
           in
-            VariantF_2 (closed { value = outer })
+            VariantF_2 (wrapper { value = newValue })
         Nothing ->
-          unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Bifunctor.bimap"
+          unsafeCrashWith "Pattern match failed at Variant.Polynomial.Bifunctor.bimap"
     where
     coerceV :: Internal.OpenVariantFRep_2 _ _ _ -> OpenVariantF_2 _ _ _
     coerceV = unsafeCoerce
@@ -123,42 +125,42 @@ instance
   Internal.DissectRow r s =>
   Dissect (VariantF r) (VariantF_2 s) where
   right = case _ of
-    Left (VariantF closed@{ instances: { dissects }, value: x }) ->
+    Left (VariantF wrapper@{ instances, value }) ->
       let
-        (Internal.OpenVariantFRep v) = coerceR x
+        (Internal.OpenVariantFRep internals) = coerceR value
       in
-        case lookup v.tag dissects of
-          Just dissect -> case dissect.right (Left v.value) of
-            Left (Tuple j inner) ->
+        case lookup internals.tag instances.dissects of
+          Just dissect -> case dissect.right (Left internals.value) of
+            Left (Tuple yield inner) ->
               let
-                outer = coerceV_2 (v { value = inner })
+                outer = coerceV_2 (internals { value = inner })
               in
-                Left (Tuple j (VariantF_2 (closed { value = outer })))
+                Left (Tuple yield (VariantF_2 (wrapper { value = outer })))
             Right inner ->
               let
-                outer = coerceV (v { value = inner })
+                outer = coerceV (internals { value = inner })
               in
-                Right (VariantF (closed { value = outer }))
+                Right (VariantF (wrapper { value = outer }))
           Nothing ->
-            unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Dissect.right"
-    Right (Tuple (VariantF_2 closed@{ instances: { dissects }, value: x }) c) ->
+            unsafeCrashWith "Pattern match failed at Variant.Polynomial.Dissect.right"
+    Right (Tuple (VariantF_2 wrapper@{ instances, value }) c) ->
       let
-        (Internal.OpenVariantFRep_2 v) = coerceR_2 x
+        (Internal.OpenVariantFRep_2 internals) = coerceR_2 value
       in
-        case lookup v.tag dissects of
-          Just dissect -> case dissect.right (Right (Tuple v.value c)) of
-            Left (Tuple j inner) ->
+        case lookup internals.tag instances.dissects of
+          Just dissect -> case dissect.right (Right (Tuple internals.value c)) of
+            Left (Tuple yield inner) ->
               let
-                outer = coerceV_2 (v { value = inner })
+                outer = coerceV_2 (internals { value = inner })
               in
-                Left (Tuple j (VariantF_2 (closed { value = outer })))
+                Left (Tuple yield (VariantF_2 (wrapper { value = outer })))
             Right inner ->
               let
-                outer = coerceV (v { value = inner })
+                outer = coerceV (internals { value = inner })
               in
-                Right (VariantF (closed { value = outer }))
+                Right (VariantF (wrapper { value = outer }))
           Nothing ->
-            unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.Dissect.right"
+            unsafeCrashWith "Pattern match failed at Variant.Polynomial.Dissect.right"
     where
     coerceR :: OpenVariantF _ _ -> Internal.OpenVariantFRep _ _
     coerceR = unsafeCoerce
@@ -185,7 +187,7 @@ convert (VariantF { instances: { functors }, value }) =
         , map: functor.map
         }
       Nothing ->
-        unsafeCrashWith "Pattern match failed at Data.Functor.Polynomial.Variant.convert"
+        unsafeCrashWith "Pattern match failed at Variant.Polynomial.convert"
 
 -- | Match a `VariantF` against a `Record` containing functions
 -- | operating on each possible case. Like `on`, this function also
@@ -225,12 +227,12 @@ match
   -> VariantF r3 a
   -> b
 match a c =
-  onMatch a (\_ -> unsafeCrashWith "Data.Functor.Polynomial.Variant: pattern match failed") c
+  onMatch a (\_ -> unsafeCrashWith "Variant.Polynomial: pattern match failed") c
 
 -- | Combinator for pattern matching on `VariantF`.
 case_ :: forall a b. VariantF () a -> b
 case_ (VariantF { value }) = unsafeCrashWith case unsafeCoerce value of
-  Internal.OpenVariantFRep w -> "Data.Functor.Polynomial.Variant: pattern match failed in tag ["
+  Internal.OpenVariantFRep w -> "Variant.Polynomial: pattern match failed in tag ["
     <> w.tag
     <> "]."
 
