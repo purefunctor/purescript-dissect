@@ -9,7 +9,6 @@ import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
 import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial (Const(..), Id(..), Product(..))
-import Data.Functor.Polynomial.Variant (VariantF(..), PreVariantF, instantiate, convert, inj, match, onMatch)
 import Data.Functor.Variant as Variant
 import Data.List (List(..), (:))
 import Data.Map as M
@@ -23,6 +22,7 @@ import Safe.Coerce (coerce)
 import Type.Prelude (Proxy(..))
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
+import Variant.Polynomial (VariantF(..), PreVariantF, instantiate, convert, inj, match, onMatch)
 
 type Example :: (Row (Type -> Type) -> Type -> Type) -> Row (Type -> Type) -> Type
 type Example f r = f (a :: Id | r) Unit

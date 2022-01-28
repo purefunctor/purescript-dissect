@@ -2,7 +2,7 @@ module Record.Polynomial where
 
 import Prelude
 
-import Data.Functor.Polynomial.Variant.Internal as Internal
+import Variant.Polynomial.Internal as Internal
 import Prim.Row as R
 import Prim.RowList as RL
 import Type.Equality (class TypeEquals)

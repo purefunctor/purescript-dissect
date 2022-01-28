@@ -1,4 +1,4 @@
-module Data.Functor.Polynomial.Variant.Internal where
+module Variant.Polynomial.Internal where
 
 import Prelude
 

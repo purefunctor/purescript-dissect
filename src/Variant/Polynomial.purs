@@ -1,13 +1,13 @@
 -- | This module provides a `VariantF`-like dissectible type. Helper
 -- | functions for converting to `variant`-flavoured `VariantF`s and
 -- | pattern matching are provided for convenience.
-module Data.Functor.Polynomial.Variant where
+module Variant.Polynomial where
 
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
 import Data.Either (Either(..))
-import Data.Functor.Polynomial.Variant.Internal as Internal
+import Variant.Polynomial.Internal as Internal
 import Data.Functor.Variant as Variant
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
