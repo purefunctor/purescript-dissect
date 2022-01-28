@@ -22,7 +22,7 @@ import Safe.Coerce (coerce)
 import Type.Prelude (Proxy(..))
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
-import Variant.Polynomial (VariantF(..), PreVariantF, instantiate, convert, inj, match, onMatch)
+import Variant.Polynomial (VariantF(..), OpenVariantF, instantiate, convert, inj, match, onMatch)
 
 type Example :: (Row (Type -> Type) -> Type -> Type) -> Row (Type -> Type) -> Type
 type Example f r = f (a :: Id | r) Unit
@@ -31,7 +31,7 @@ type Example f r = f (a :: Id | r) Unit
 -- whether or not it implements a `Functor` instance. This makes
 -- deeper composition much, much easier than say, enforcing said
 -- `Functor` instance instantly.
-openVariantF :: forall r. Example PreVariantF r
+openVariantF :: forall r. Example OpenVariantF r
 openVariantF = inj (Proxy :: _ "a") (Id unit)
 
 -- A closed variant is any open variant that has `Functor`, `Bifunctor`,
@@ -253,7 +253,7 @@ type IceCreamR r =
   )
 
 type IceCreamV :: Row (Type -> Type) -> Type -> Type
-type IceCreamV r = PreVariantF (IceCreamR r)
+type IceCreamV r = OpenVariantF (IceCreamR r)
 
 vanilla :: forall r a. Scoops -> IceCreamV r a
 vanilla scoops = inj (Proxy :: _ "vanilla") (Const scoops)
@@ -281,7 +281,7 @@ chocolateServing = closeIceCream $ chocolate 3
 
 type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
 
-type IceCreamV' r = PreVariantF (IceCreamR' r)
+type IceCreamV' r = OpenVariantF (IceCreamR' r)
 
 strawberry :: forall r a. Scoops -> IceCreamV' r a
 strawberry scoops = inj (Proxy :: _ "strawberry") (Const scoops)

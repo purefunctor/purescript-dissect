@@ -11,14 +11,14 @@ import Prim.RowList (Cons, Nil, RowList)
 import Type.Prelude (class IsSymbol, class ListToRow, class RowToList, Proxy(..), reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
 
-newtype VariantFRep :: forall k. (k -> Type) -> k -> Type
-newtype VariantFRep f a = VariantFRep
+newtype OpenVariantFRep :: forall k. (k -> Type) -> k -> Type
+newtype OpenVariantFRep f a = OpenVariantFRep
   { tag :: String
   , value :: f a
   }
 
-newtype VariantFRep_2 :: forall k l. (k -> l -> Type) -> k -> l -> Type
-newtype VariantFRep_2 f a b = VariantFRep_2
+newtype OpenVariantFRep_2 :: forall k l. (k -> l -> Type) -> k -> l -> Type
+newtype OpenVariantFRep_2 f a b = OpenVariantFRep_2
   { tag :: String
   , value :: f a b
   }
@@ -39,14 +39,15 @@ type DissectClass =
 --   { plug :: forall p q x. x -> q x x -> p x
 --   }
 
+type Instances =
+  { functors :: Object FunctorClass
+  , bifunctors :: Object BifunctorClass
+  , dissects :: Object DissectClass
+  -- , plugs :: Object PlugClass
+  }
+
 class FindInstances (rl :: RowList (Type -> Type)) where
-  instances
-    :: Proxy rl
-    -> { functors :: Object FunctorClass
-       , bifunctors :: Object BifunctorClass
-       , dissects :: Object DissectClass
-       -- , plugs :: Object PlugClass
-       }
+  instances :: Proxy rl -> Instances
 
 instance FindInstances Nil where
   instances _ =
