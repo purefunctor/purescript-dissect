@@ -19,6 +19,7 @@ import Type.Row (class Cons)
 import Unsafe.Coerce (unsafeCoerce)
 import Variant.Polynomial.Internal as Internal
 
+-- | An "open" variant, essentially a variant with no associated instances.
 data OpenVariantF :: forall k. Row (k -> Type) -> k -> Type
 data OpenVariantF r a
 
@@ -38,6 +39,7 @@ inj proxy value = coerceV $ Internal.OpenVariantFRep
   coerceV :: Internal.OpenVariantFRep f a -> OpenVariantF r a
   coerceV = unsafeCoerce
 
+-- | A "complete" variant, equipped with runtime-level type class instances.
 newtype VariantF :: forall k. Row (k -> Type) -> k -> Type
 newtype VariantF r a =
   VariantF

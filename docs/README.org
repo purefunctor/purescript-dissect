@@ -2,214 +2,99 @@
 An implementation of [[https://dl.acm.org/doi/abs/10.1145/1328438.1328474][Clowns to the Left of me, Jokers to the Right (Pearl): Dissecting Data
 Structures]] by Conor McBride in PureScript.
 
-This package provides three useful modules:
-- ~Dissect.Class~
-- ~Data.Functor.Polynomial~
-- ~Data.Functor.Polynomial.Variant~
+This package the following modules:
+- =Dissect.Class=
+- =Data.Functor.Polynomial=
+- =Record.Polynomial=
+- =Variant.Polynomial=
 
 ** Installation
-Using ~spago~:
-
-#+begin_src
-$ spago install dissect
-#+end_src
-
-or if not present within the current package set, add it to ~packages.dhall~:
-
-#+begin_src dhall
-let upstream =
-      https://github.com/purescript/package-sets/releases/download/psc-0.14.4-20211005/packages.dhall
-        sha256:2ec351f17be14b3f6421fbba36f4f01d1681e5c7f46e0c981465c4cf222de5be
-
-let overrides = {=}
-
-let additions =
-      { dissect =
-        { dependencies = [ ... ]  -- copy dependencies from spago.dhall
-        , repo = "https://github.com/PureFunctor/purescript-dissect.git"
-        , version = "<insert-desired-revision-here>"
-        }
-      }
-
-in  upstream // overrides // additions
+Using =spago=:
+#+begin_src sh
+spago install dissect
 #+end_src
 
 ** Rationale
-I originally encountered the paper while looking for a way to ensure stack safety with [[https://github.com/purescript-contrib/purescript-matryoshka][matryoshka]],
-being briefly mentioned in a comment in [[https://github.com/purescript-contrib/purescript-matryoshka/issues/9#issuecomment-400384397][matryoshka#9]]. This eventually led to the creation of [[https://github.com/PureFunctor/purescript-ssrs][ssrs]]
-where I derived stack-safe recursion schemes via dissectible data structures based on the
-tail-recursive catamorphism originally implemented in the paper.
-
-Another use-case I've found is for implementing mutually recursive collections of types which is
-explored in the paper: [[https://dl.acm.org/doi/abs/10.1145/1631687.1596585][Generic programming with fixed points for mutually recursive datatypes]]. I've
-implemented a proof of concept in [[./test/Universe.purs][./test/Universe.purs]] and it works well in conjunction with
-recursion schemes provided by [[https://github.com/PureFunctor/purescript-ssrs][ssrs]].
+I originally encountered the paper while looking for stack-safe recursion schemes in PureScript,
+particularly with the [[https://github.com/purescript-contrib/purescript-matryoshka][matryoshka]] library, briefly mentioned in the following issue: [[https://github.com/purescript-contrib/purescript-matryoshka/issues/9#issuecomment-400384397][matryoshka#9]].
 
 ** Quick Primer on Dissect
-I'm assuming that by coming across this package, you're comfortable working with fixed-point
-functors from recursion schemes. As such, I won't try to explain everything in-depth, just the
-concepts that matter.
+In essence, dissections essentially describe how to decompose a structure =f a=, such that all values
+of =a= can be obtained and eventually replaced with some other value of type =b=. Dissections
+effectively generalize the concept of mapping a function over some =Functor f= into the runtime,
+through the use of an intermediary representation =Bifunctor q=, which is parameterized by the
+original values =a=, and the replacement values =b=.
 
-Essentially, dissections take fixed-point functors and transform them into bifunctors that contain
-either the base case of a fixed-point data type or its recursive step. To contextualize this, let's
-say we have the following tree structure:
-
+Let's use the following data type as a motivating example. This =List= type is essentially a regular
+cons-list whose recursion is factored into the type parameter =n=. The canonical =List= structure can be
+restored through the use of the =Mu= type, but I won't go over that here.
 #+begin_src purescript
-data TreeF n = Leaf | Fork n n n
+data List a n
+  = Nil
+  | Cons a n
 #+end_src
 
-Since recursion is factored out in this definition and replaced by some type variable ~n~, we can fill
-it with anything we want. Likewise, we can also use the ~Mu~ combinator to effectively create a
-recursive data type. What we want in a dissection is to be able to represent the steps on how we're
-going to deconstruct recursive cases such as ~Fork~. Let's start by visualizing the essence of
-dissecting functors:
-
-We say that ~TreeF~ essentially has a three seats for ~n~ to be contained in, and that lives under the
-~Fork~ constructor:
+Writing a =Functor= instance for this type would be trivial—it simply involves having to match against
+the type constructors and applying =f= to the appropriate points where =n= appears.
 #+begin_src purescript
-Fork [ n - n - n ]
+instance Functor (List a) where
+  map _ Nil = Nil
+  map f (Cons a n) = Cons a (f n)
 #+end_src
 
-Note that we take no notice to the ~Leaf~ constructor as it contains no seats for ~n~.
-
-The ~right~ function allows us to take this data and pluck out an ~n~, leaving us a hole:
+A =Dissect= instance on the other hand, generalizes the concept of "the appropriate points where =n=
+appears", and this is achieved by describing how to get all values of =n=, and replace them with some
+=m=. As such, the =Dissect= instance for a =List= would look like the following:
 #+begin_src purescript
-> right $ Fork [ n - n - n ]
+data List_2 a n m = Cons_2 a
 
-n, Fork [ () - n - n ]
-#+end_src
+instance Bifunctor (List_2 a) where
+  bimap _ _ (Cons_2 a) = (Cons_2 a)
 
-Likewise, it can also take a structure with holes and something to fill it with:
-#+begin_src purescript
-> right $ m, Fork [ () - n - n ]
-
-Fork [ m - n - n ]
-#+end_src
-
-If we repeat this process, we eventually end up plucking out all ~n~ and replacing them with ~m~:
-#+begin_src purescript
-> right $ Fork [ m - n - n ]
-n, Fork [ m - () - n ]
-
-> right $ m, Fork [ m - () - n ]
-Fork [ m - m - n ]
-
-> right $ Fork [ m - m - n ]
-n, Fork [ m - m - () ]
-
-> right $ m, Fork [ m - m - () ]
-Fork [ m - m - m ]
-#+end_src
-
-This is, in essence, one way to do a ~map~ operation, but with the added benefit of being able to
-perform it in a stack-safe manner, as we've essentially factored out recursion, and we're really
-only concerned with plucking out and planting new values into structures. Unfortunately, its cost is
-that we must describe this process ourselves by defining data types that correspond to the
-intermediate states of where the hole currently is.
-
-In reality, the ~right~ function has the following type:
-#+begin_src purescript
-right
-  ∷ ∀ c j
-  . Either (p j) (Tuple (q c j) c)
-  → Either (Tuple j (q c j)) (p c)
-#+end_src
-
-Its left path describes plucking out a value from some ~Functor~ and returning its dissection paired
-with its inner value ~j~, or it returns the same ~Functor~ containing some value ~c~; its right path on
-the other hand takes a dissection and a value to fill it with, and has the same return choice as the
-left path. There also exists the ~pluck~ and ~plant~ helper functions for choosing paths more elegantly:
-#+begin_src purescript
-pluck ∷ ∀ p q c j. Dissect p q ⇒ p j → Either (Tuple j (q c j)) (p c)
-pluck = right <<< Left
-
-plant ∷ ∀ p q c j. Dissect p q ⇒ (q c j) → c → Either (Tuple j (q c j)) (p c)
-plant q c = right (Right (Tuple q c))
-#+end_src
-
-Now, let's start writing actual code:
-#+begin_src purescript
-data TreeF n = Leaf
-             | Fork n n n
-
-derive instance Functor TreeF
-
-data TreeF_2 n m = ForkRR m m
-                 | ForkLR n m
-                 | ForkLL n n
-
-instance Bifunctor TreeF_2 where
-  bimap f g = case _ of
-    ForkRR m0 m1 -> ForkRR (g m0) (g m1)
-    ForkLR n0 m1 -> ForkLR (f n0) (g m1)
-    ForkLL n0 n1 -> ForkLL (f n0) (f n1)
-#+end_src
-
-With boilerplate out of the way, we can now write the ~Dissect~ instance:
-#+begin_src purescript
-instance Dissect TreeF TreeF_2 where
+instance Dissect (List a) (List_2 a) where
   right = case _ of
-    Left Leaf → Right Leaf
+    -- We start by writing cases for `Init`. Since `Nil` contains no
+    -- `n` values, we immediately terminate with `Return Nil`.
+    Init Nil -> Return Nil
+    -- On the other hand, `Cons` has a single `n`, so we `Yield` the
+    -- `n` and a corresponding `Cons_2` constructor, representing a
+    -- structure that is waiting for the `n` that it lost to be
+    -- replaced.
+    Init (Cons a n) -> Yield n (Cons_2 a)
+    -- `Init` aside, we then move on to writing `Next` cases. `Next`
+    -- essentially carries the payload of a structure waiting for
+    -- a replacement value, and the replacement value itself.
+    --
+    -- In this case, since there's no other `n` values, we `Return`
+    -- the final `Cons` structure with the `m`.
+    Next (Cons_2 a) m -> Return (Cons a m)
 #+end_src
 
-First and foremost, it's impossible to dissect the ~Leaf~ constructor as it contains no points of
-recursion, so we terminate immediately, however, ~Fork~ is much more interesting. Here we can see how
-its first element is being plucked out, with the rest of its seats being delegated to ~ForkRR~.
+Now equipped with a =Dissect= instance, we can also mechanize the mapping operation:
 #+begin_src purescript
-  Left (Fork m n o) → Left (Tuple m (ForkRR n o))
+map :: forall p q a b. Dissect p q => (a -> b) -> p a -> p b
+map f x = continue (right (Init x))
+  where
+  continue (Yield j c) = continue (right (Next c (f j)))
+  continue (Return c) = c
 #+end_src
-
-Then, we move on to the ~Right~ path. In here, we first start by plucking out yet another seat in
-~ForkRR~, delegating the remaining seat into ~ForkLR~ and planting some other value in its place.
-#+begin_src purescript
-  Right (Tuple w c) → case w of
-    ForkRR m n → Left (Tuple m (ForkLR c n))
-#+end_src
-
-For ~ForkLR~, we pluck out another seat yet again, planting a new value in its place using
-~ForkLL~. Likewise, we also carry over the value we've planted previously in ~ForkLR~.
-#+begin_src purescript
-    ForkLR n m → Left (Tuple m (ForkLL n c))
-#+end_src
-
-Finally, for ~ForkLL~, we start reconstructing ~Fork~ but with the planted values:
-#+begin_src purescript
-    ForkLL n o → Right (Fork n o c)
-#+end_src
-
-You've just written your first ~Dissect~ instance!
-#+begin_src purescript
-instance Dissect TreeF TreeF_2 where
-  right = case _ of
-    Left Leaf → Right Leaf
-    Left (Fork m n o) → Left (Tuple m (ForkRR n o))
-    Right (Tuple w c) → case w of
-      ForkRR m n → Left (Tuple m (ForkLR c n))
-      ForkLR n m → Left (Tuple m (ForkLL n c))
-      ForkLL n o → Right (Fork n o c)
-#+end_src
-
-In conclusion, the ~Dissect~ class factors out the recursion in the traversal of some recursive data
-structure. Instead of relying on recursion primitives, we've successfully lifted recursion into a
-toolkit for implementing stateful iterative machines.
 
 ** Polynomial Functors and Free Dissections
-This package also comes equipped with the ~Data.Functor.Polynomial~ module which can be used to define
-data structures generically with the added benefit of getting ~Dissect~ instances for free. As an
-example, suppose that we want to represent ~List~ generically:
+This package also provides the =Data.Functor.Polynomial= module, which can be used to generically
+define data structures with the added benefit of free =Dissect= instances. For example, let's consider
+the canonical cons-list type.
 #+begin_src purescript
 data List a = Nil | Cons a (List a)
 #+end_src
 
-First, let's consider what our data type would look like after turning it into a fixed point functor:
+If we generalize the recursion and make it a fixed-point functor, we get the following structure:
 #+begin_src purescript
 data ListF a n = Nil | Cons a n
 #+end_src
 
 Then, we can start modeling components according to their signatures:
 - ~Nil~ can be represented using ~Const Unit~
-- ~Cons~ is a product of some ~a~ and our recursive marker ~n~, therefore, we'd want to have
-  ~Product (Const a) Id~
+- ~Cons~ is a product of some ~a~ and a recursive marker ~n~, or ~Product (Const a) Id~
 
 Taking these two together, we end up with the ~Sum~ type. We can also use the ~(:+:)~, and ~(:*:)~ for
 sums and products respectively.
@@ -230,110 +115,99 @@ _Cons :: forall a. a -> List a -> List a
 _Cons a n = In (SumR (Product (Const a) (Id n)))
 #+end_src
 
-However, using ~Sum~ becomes cumbersome as more alternatives also means a deeper structure to pattern
-match against. This package provides the ~ClosedVariantF~ dissectible which allows one to use a variant type
-instead of ~Sum~ for easier pattern matching using the ~case_~ and ~on~ combinators:
+*** Variant
+The =Variant.Polynomial= module provides a =VariantF=-like dissectible that serves as an alternative to
+deeply-nested =Sum= types. Like =purescript-variant=, convenient pattern matching functions are also
+provided.
+
 #+begin_src purescript
-type TreeR :: Type -> Row (Type -> Type)
-type TreeR a =
-  ( leaf :: Const Unit
-  , fork2 :: Id :*: Const a :*: Id
-  , fork3 :: Id :*: Const a :*: Id :*: Const a :*: Id
-  )
+type Example :: (Row (Type -> Type) -> Type -> Type) -> Row (Type -> Type) -> Type
+type Example f r = f (a :: Id | r) Unit
 
-type TreeF :: Type -> Type -> Type
-type TreeF a = ClosedVariantF (TreeR a)
+-- An open variant allows any `* -> *`-kinded type to be injected
+-- whether or not it implements a `Functor` instance. This makes
+-- deeper composition much, much easier than say, enforcing said
+-- `Functor` instance instantly.
+openVariantF :: forall r. Example OpenVariantF r
+openVariantF = inj (Proxy :: _ "a") (Id unit)
 
-type Tree :: Type -> Type
-type Tree a = Mu (TreeF a)
+-- A closed variant is any open variant that has `Functor`, `Bifunctor`,
+-- and `Dissect` instances. An unsafe routine is used internally to
+-- capture the instance methods onto the closed variant.
+closedVariantF :: Example VariantF ()
+closedVariantF = instantiate openVariantF
 
-leaf :: forall a. Tree a
-leaf = In (close (inj (Proxy :: _ "leaf") (Const unit)))
+-- Any closed variant can be converted into a vanilla variant for
+-- compatibility. If you're only interested in pattern matching,
+-- a wrapper for `onMatch` is also provided.
+vanillaVariantF :: Example Variant.VariantF ()
+vanillaVariantF = convert closedVariantF
 
-fork2 :: forall a. Tree a -> a -> Tree a -> Tree a
-fork2 a b c = In (close (inj (Proxy :: _ "fork2") (Id a :*: Const b :*: Id c)))
+-- And can be then used for operations like onMatch with relative
+-- ease.
+onMatchExample :: Unit
+onMatchExample = vanillaVariantF # Variant.onMatch
+  { a: \(Id u) -> u
+  }
+  (\_ -> unsafeCrashWith "Pattern match failed!")
 
-fork3 :: forall a. Tree a -> a -> Tree a -> a -> Tree a -> Tree a
-fork3 a b c d e =
-  In (close (inj (Proxy :: _ "fork3") (Id a :*: Const b :*: Id c :*: Const d :*: Id e)))
-
-collect :: TreeF Int Int -> Int
-collect = case_
-  # on (Proxy :: _ "leaf")
-      ( \(Const _) -> 1
-      )
-  # on (Proxy :: _ "fork2")
-      ( \(Id a :*: Const b :*: Id c) -> a + b + c
-      )
-  # on (Proxy :: _ "fork3")
-      ( \(Id a :*: Const b :*: Id c :*: Const d :*: Id e) ->
-           a + b + c + d + e
-      )
+-- Alternatively, convenience wrappers are also provided:
+onMatchExample' :: Unit
+onMatchExample' = closedVariantF # onMatch
+  { a: \(Id u) -> u
+  }
+  (\_ -> unit)
 #+end_src
 
-*** Deferred Instances
-The =Data.Functor.Polynomial.Variant= module provides two data types, =PreVariantF= and =VariantF=.
-The former is constructed using =inj=, much like in =purescript-variant=, and for the latter, it takes some
-=PreVariantF= whose fields have =Functor=, =Bifunctor=, and =Dissect= instances. By deferring when these
-instances are required, we're able to create extensible data types with relative ease.
+*** Record
+The =Record.Polynomial= module provides a dissectible that operates on a =Record=, serving as an
+alternative to deeply-nested =Product= types. The =to= and =from= functions are used to convert
+back and forth =Record= and =RecordF=. Note that unlike =Product=, there's no definitive order to
+which elements are yielded first, and as such, effectful operations must be treated with care.
+
 #+begin_src purescript
-type Scoops = Int
+type ConsR =
+  (head :: Const Int, tail :: Id)
 
--- We can define an extensible row and use it in the
--- context of a variant, without having a Functor
--- instance upfront.
+type ConsR' a =
+  (head :: Const Int a, tail :: Id a)
 
-type IceCreamR :: Row (Type -> Type) -> Row (Type -> Type)
-type IceCreamR r =
-  ( vanilla :: Const Scoops
-  , chocolate :: Const Scoops
-  | r
+type IntListV =
+  ( "nil" :: Const Unit
+  , "cons" :: RecordF ConsR
   )
 
-type IceCreamV :: Row (Type -> Type) -> Type -> Type
-type IceCreamV r = PreVariantF (IceCreamR r)
+type IntListF = VariantF IntListV
 
-vanilla :: forall r a. Scoops -> IceCreamV r a
-vanilla scoops = inj (Proxy :: _ "vanilla") (Const scoops)
+type IntList = Mu IntListF
 
-chocolate :: forall r a. Scoops -> IceCreamV r a
-chocolate scoops = inj (Proxy :: _ "chocolate") (Const scoops)
+_nil :: IntList
+_nil = In (instantiate $ inj (Proxy :: _ "nil") (Const unit))
 
--- But in order to make use of dissections, we have to
--- "close" the type.
+_cons :: Int -> IntList -> IntList
+_cons =
+  let
+    -- We monomorphize type class methods early, as to make `_cons`
+    -- less taxing to performance.
+    consFrom :: Record (ConsR' IntList) -> RecordF ConsR IntList
+    consFrom = from
 
-type IceCreamC :: Type -> Type
-type IceCreamC = VariantF (IceCreamR ())
+    consInstantiate :: forall a. OpenVariantF IntListV a -> IntListF a
+    consInstantiate = instantiate
+  in
+    \h t -> In (consInstantiate $ inj (Proxy :: _ "cons") (consFrom { head: Const h, tail: Id t }))
 
-closeIceCream :: forall a. IceCreamV () a -> IceCreamC a
-closeIceCream = instantiate
+-- `cata` is defined in the `ssrs` package.
+intListSum :: IntList -> Int
+intListSum = cata go
+  where
+  go :: IntListF Int -> Int
+  go = match
+    { nil: \_ -> 0
+    , cons: to >>> \{ head: Const head, tail: Id tail } -> head + tail
+    }
 
-vanillaServing :: forall a. IceCreamC a
-vanillaServing = closeIceCream $ vanilla 3
-
-chocolateServing :: forall a. IceCreamC a
-chocolateServing = closeIceCream $ chocolate 3
-
--- Likewise, we can also extend the base variant with
--- new fields.
-
-type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
-
-type IceCreamV' r = PreVariantF (IceCreamR' r)
-
-strawberry :: forall r a. Scoops -> IceCreamV' r a
-strawberry scoops = inj (Proxy :: _ "strawberry") (Const scoops)
-
--- And close them once we're done.
-
-type IceCreamC' = VariantF (IceCreamR' ())
-
-closeIceCream' :: forall a. IceCreamV' () a -> IceCreamC' a
-closeIceCream' = instantiate
-
-strawberryServing :: forall a. IceCreamC' a
-strawberryServing = closeIceCream' $ strawberry 3
-
-chocolateServing' :: forall a. IceCreamC' a
-chocolateServing' = closeIceCream' $ chocolate 3
+-- An example of construction and destruction.
+intListExample :: Int
+intListExample = intListSum (_cons 10 (_cons 11 (_cons 21 _nil)))
 #+end_src

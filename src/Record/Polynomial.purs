@@ -1,3 +1,8 @@
+-- | This module provides a dissectible `Record`-like type. Similar to
+-- | `VariantF`, this serves as an alternative to deeply-nested `Product`
+-- | types. Unlike the latter though, `RecordF` has no definitive order
+-- | of evaluation, and this must be taken into account especially when
+-- | dealing with operations involving effects.
 module Record.Polynomial where
 
 import Prelude
@@ -15,6 +20,7 @@ import Type.Equality (class TypeEquals)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
+-- | A record whose values are functors parameterized by some type `a`.
 data RecordF :: Row (Type -> Type) -> Type -> Type
 data RecordF r a
 

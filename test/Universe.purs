@@ -278,7 +278,7 @@ chocolateServing = closeIceCream $ chocolate 3
 -- Likewise, we can also extend the base variant with
 -- new fields.
 
-type IceCreamR' r = IceCreamR ( strawberry :: Const Scoops | r )
+type IceCreamR' r = IceCreamR (strawberry :: Const Scoops | r)
 
 type IceCreamV' r = OpenVariantF (IceCreamR' r)
 
@@ -301,10 +301,10 @@ chocolateServing' = closeIceCream' $ chocolate 3
 --
 
 type ConsR =
-  ( head :: Const Int, tail :: Id )
+  (head :: Const Int, tail :: Id)
 
 type ConsR' a =
-  ( head :: Const Int a, tail :: Id a)
+  (head :: Const Int a, tail :: Id a)
 
 type IntListV =
   ( "nil" :: Const Unit

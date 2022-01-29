@@ -33,6 +33,26 @@ instance Dissect TreeF TreeF_2 where
       ForkLR n m -> Yield m (ForkLL n c)
       ForkLL n o -> Return (Fork n o c)
 
+data List a n
+  = Nil
+  | Cons a n
+
+instance Functor (List a) where
+  map _ Nil = Nil
+  map f (Cons a n) = Cons a (f n)
+
+data List_2 :: Type -> Type -> Type -> Type
+data List_2 a n m = Cons_2 a
+
+instance Bifunctor (List_2 a) where
+  bimap _ _ (Cons_2 a) = (Cons_2 a)
+
+instance Dissect (List a) (List_2 a) where
+  right = case _ of
+    Init Nil -> Return Nil
+    Init (Cons a n) -> Yield n (Cons_2 a)
+    Next (Cons_2 a) n -> Return (Cons a n)
+
 main :: Effect Unit
 main = do
   log "Finished."
