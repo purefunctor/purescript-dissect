@@ -22,6 +22,7 @@ import Variant.Polynomial.Internal as Internal
 data OpenVariantF :: forall k. Row (k -> Type) -> k -> Type
 data OpenVariantF r a
 
+-- | Inject a value into an `OpenVariantF`.
 inj
   :: forall n f t r a
    . Cons n f t r
@@ -44,6 +45,7 @@ newtype VariantF r a =
     , value :: OpenVariantF r a
     }
 
+-- | Instantiate an `OpenVariantF` into a `VariantF`.
 instantiate
   :: forall r rl a
    . RL.RowToList r rl

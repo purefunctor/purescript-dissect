@@ -34,6 +34,7 @@ class To r a r' | r a -> r'
 
 instance (RL.RowToList r rl, ToAux rl a r') => To r a r'
 
+-- | Convert a `RecordF` back into a `Record`.
 to :: forall r a r'. To r a r' => RecordF r a -> Record r'
 to = unsafeCoerce >>> _.values
 
@@ -54,6 +55,7 @@ class From r a r' | r -> a r'
 
 instance (RL.RowToList r rl, FromAux rl a r') => From r a r'
 
+-- | Convert a `Record` into a `RecordF`.
 from
   :: forall r a r' rl'
    . From r a r'
