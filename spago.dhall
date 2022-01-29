@@ -13,7 +13,6 @@
   , "ordered-collections"
   , "partial"
   , "prelude"
-  , "record"
   , "safe-coerce"
   , "st"
   , "tailrec"
