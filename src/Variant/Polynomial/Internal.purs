@@ -8,8 +8,9 @@ import Data.Tuple (Tuple)
 import Dissect.Class (class Dissect, right)
 import Foreign.Object (Object, insert)
 import Foreign.Object as Object
+import Prim.Row as R
 import Prim.RowList (Cons, Nil, RowList)
-import Type.Prelude (class IsSymbol, class ListToRow, class RowToList, Proxy(..), reflectSymbol)
+import Type.Prelude (class IsSymbol, class RowToList, Proxy(..), reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
 
 newtype OpenVariantFRep :: forall k. (k -> Type) -> k -> Type
@@ -85,20 +86,21 @@ instances
   -> Instances
 instances = instancesAux emptyInstances
 
-class DissectRowI :: RowList (Type -> Type) -> RowList (Type -> Type -> Type) -> Constraint
+class DissectRowI :: RowList (Type -> Type) -> Row (Type -> Type -> Type) -> Constraint
 class DissectRowI r s | r -> s
 
-instance DissectRowI Nil Nil
+instance DissectRowI Nil ()
 
 else instance
-  ( DissectRowI r s
-  , Functor p
-  , Bifunctor q
-  , Dissect p q
+  ( DissectRowI current future
+  , Functor functor
+  , Bifunctor bifunctor
+  , Dissect functor bifunctor
+  , R.Cons label bifunctor future futureWithElement
   ) =>
-  DissectRowI (Cons n p r) (Cons n q s)
+  DissectRowI (Cons label functor current) futureWithElement
 
 class DissectRow :: Row (Type -> Type) -> Row (Type -> Type -> Type) -> Constraint
 class DissectRow r s | r -> s
 
-instance (RowToList r r', DissectRowI r' s', ListToRow s' s) => DissectRow r s
+instance (RowToList r r', DissectRowI r' s) => DissectRow r s
