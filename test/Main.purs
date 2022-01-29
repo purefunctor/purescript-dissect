@@ -3,9 +3,7 @@ module Test.Main where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
-import Data.Either (Either(..))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect)
+import Dissect.Class (class Dissect, Input(..), Output(..))
 import Effect (Effect)
 import Effect.Class.Console (log)
 
@@ -28,12 +26,12 @@ instance Bifunctor TreeF_2 where
 
 instance Dissect TreeF TreeF_2 where
   right = case _ of
-    Left Leaf -> Right Leaf
-    Left (Fork m n o) -> Left (Tuple m (ForkRR n o))
-    Right (Tuple w c) -> case w of
-      ForkRR m n -> Left (Tuple m (ForkLR c n))
-      ForkLR n m -> Left (Tuple m (ForkLL n c))
-      ForkLL n o -> Right (Fork n o c)
+    Init Leaf -> Return Leaf
+    Init (Fork m n o) -> Yield m (ForkRR n o)
+    Next w c -> case w of
+      ForkRR m n -> Yield m (ForkLR c n)
+      ForkLR n m -> Yield m (ForkLL n c)
+      ForkLL n o -> Return (Fork n o c)
 
 main :: Effect Unit
 main = do

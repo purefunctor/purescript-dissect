@@ -5,11 +5,9 @@ module Data.Functor.Polynomial where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor, bimap)
-import Data.Either (Either(..))
 import Data.Functor.Clown (Clown(..))
 import Data.Functor.Joker (Joker(..))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect, class Plug, plug, right)
+import Dissect.Class (class Dissect, class Plug, Input(..), Output(..), plug, right)
 import Partial.Unsafe (unsafeCrashWith)
 
 -- | `Const` models non-recursive data constructors.
@@ -117,15 +115,15 @@ refute _ = unsafeCrashWith "Invalid dissection!"
 -- | dissect them further.
 instance Dissect (Const a) Zero_2 where
   right v = case v of
-    Left (Const a) -> Right (Const a)
-    Right (Tuple (Const_2 z) _) -> refute z
+    Init (Const a) -> Return (Const a)
+    Next (Const_2 z) _ -> refute z
 
 -- | `Id` has a single position for an element, and unlike `Const`,
 -- | allows its dissection to be eventually filled-in.
 instance Dissect Id One_2 where
   right v = case v of
-    Left (Id j) -> Left (Tuple j (Const_2 unit))
-    Right (Tuple (Const_2 _) c) -> Right (Id c)
+    Init (Id j) -> Yield j (Const_2 unit)
+    Next (Const_2 _) c -> Return (Id c)
 
 -- | `Sum` dissects both of its polynomial functors.
 instance
@@ -133,17 +131,17 @@ instance
   , Dissect q q'
   ) =>
   Dissect (Sum p q) (Sum_2 p' q') where
-  right v = case v of
-    Left (SumL pj) -> mindp (right (Left pj))
-    Left (SumR qj) -> mindq (right (Left qj))
-    Right (Tuple (SumL_2 pd) c) -> mindp (right (Right (Tuple pd c)))
-    Right (Tuple (SumR_2 qd) c) -> mindq (right (Right (Tuple qd c)))
+  right = case _ of
+    Init (SumL pj) -> mindp (right (Init pj))
+    Init (SumR qj) -> mindq (right (Init qj))
+    Next (SumL_2 pd) c -> mindp (right (Next pd c))
+    Next (SumR_2 qd) c -> mindq (right (Next qd c))
     where
-    mindp (Left (Tuple j pd)) = Left (Tuple j (SumL_2 pd))
-    mindp (Right pc) = Right (SumL pc)
+    mindp (Yield j pd) = Yield j (SumL_2 pd)
+    mindp (Return pc) = Return (SumL pc)
 
-    mindq (Left (Tuple j qd)) = Left (Tuple j (SumR_2 qd))
-    mindq (Right qc) = Right (SumR qc)
+    mindq (Yield j qd) = Yield j (SumR_2 qd)
+    mindq (Return qc) = Return (SumR qc)
 
 -- | `Product` either dissects its left element into a pair of the left
 -- | element's dissection and an element full of jokers; or it dissects
@@ -154,16 +152,16 @@ instance
   , Dissect q q'
   ) =>
   Dissect (Product p q) (Sum_2 (Product_2 p' (Joker q)) (Product_2 (Clown p) q')) where
-  right v = case v of
-    Left (Product pj qj) -> mindp (right (Left pj)) qj
-    Right (Tuple (SumL_2 (Product_2 pd (Joker qj))) c) -> mindp (right (Right (Tuple pd c))) qj
-    Right (Tuple (SumR_2 (Product_2 (Clown pc) qd)) c) -> mindq pc (right (Right (Tuple qd c)))
+  right = case _ of
+    Init (Product pj qj) -> mindp (right (Init pj)) qj
+    Next (SumL_2 (Product_2 pd (Joker qj))) c -> mindp (right (Next pd c)) qj
+    Next (SumR_2 (Product_2 (Clown pc) qd)) c -> mindq pc (right (Next qd c))
     where
-    mindp (Left (Tuple j pd)) qj = Left (Tuple j (SumL_2 (Product_2 pd (Joker qj))))
-    mindp (Right pc) qj = mindq pc (right (Left qj))
+    mindp (Yield j pd) qj = Yield j (SumL_2 (Product_2 pd (Joker qj)))
+    mindp (Return pc) qj = mindq pc (right (Init qj))
 
-    mindq pc (Left (Tuple j qd)) = Left (Tuple j (SumR_2 (Product_2 (Clown pc) qd)))
-    mindq pc (Right qc) = Right (Product pc qc)
+    mindq pc (Yield j qd) = Yield j (SumR_2 (Product_2 (Clown pc) qd))
+    mindq pc (Return qc) = Return (Product pc qc)
 
 instance Plug (Const n) Zero_2 where
   plug _ (Const_2 z) = refute z

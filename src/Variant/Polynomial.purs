@@ -6,11 +6,9 @@ module Variant.Polynomial where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
-import Data.Either (Either(..))
 import Data.Functor.Variant as Variant
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect)
+import Dissect.Class (class Dissect, Input(..), Output(..))
 import Dissect.Runtime.Instances as Instances
 import Foreign.Object (lookup)
 import Partial.Unsafe (unsafeCrashWith)
@@ -126,40 +124,40 @@ instance
   Instances.DissectRow r s =>
   Dissect (VariantF r) (VariantF_2 s) where
   right = case _ of
-    Left (VariantF wrapper@{ instances, value }) ->
+    Init (VariantF wrapper@{ instances, value }) ->
       let
         (Internal.OpenVariantFRep internals) = coerceR value
       in
         case lookup internals.tag instances.dissects of
-          Just dissect -> case dissect.right (Left internals.value) of
-            Left (Tuple yield inner) ->
+          Just dissect -> case dissect.right (Init internals.value) of
+            Yield yield inner ->
               let
                 outer = coerceV_2 (internals { value = inner })
               in
-                Left (Tuple yield (VariantF_2 (wrapper { value = outer })))
-            Right inner ->
+                Yield yield (VariantF_2 (wrapper { value = outer }))
+            Return inner ->
               let
                 outer = coerceV (internals { value = inner })
               in
-                Right (VariantF (wrapper { value = outer }))
+                Return (VariantF (wrapper { value = outer }))
           Nothing ->
             unsafeCrashWith "Pattern match failed at Variant.Polynomial.Dissect.right"
-    Right (Tuple (VariantF_2 wrapper@{ instances, value }) c) ->
+    Next (VariantF_2 wrapper@{ instances, value }) c ->
       let
         (Internal.OpenVariantFRep_2 internals) = coerceR_2 value
       in
         case lookup internals.tag instances.dissects of
-          Just dissect -> case dissect.right (Right (Tuple internals.value c)) of
-            Left (Tuple yield inner) ->
+          Just dissect -> case dissect.right (Next internals.value c) of
+            Yield yield inner ->
               let
                 outer = coerceV_2 (internals { value = inner })
               in
-                Left (Tuple yield (VariantF_2 (wrapper { value = outer })))
-            Right inner ->
+                Yield yield (VariantF_2 (wrapper { value = outer }))
+            Return inner ->
               let
                 outer = coerceV (internals { value = inner })
               in
-                Right (VariantF (wrapper { value = outer }))
+                Return (VariantF (wrapper { value = outer }))
           Nothing ->
             unsafeCrashWith "Pattern match failed at Variant.Polynomial.Dissect.right"
     where

@@ -1,10 +1,8 @@
 module Dissect.Runtime.Instances where
 
 import Data.Bifunctor (class Bifunctor, bimap)
-import Data.Either (Either)
 import Data.Functor (class Functor, map)
-import Data.Tuple (Tuple)
-import Dissect.Class (class Dissect, right)
+import Dissect.Class (class Dissect, Input, Output, right)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Prim.Row as R
@@ -21,7 +19,7 @@ type BifunctorClass =
   }
 
 type DissectClass =
-  { right :: forall p q c j. Either (p j) (Tuple (q c j) c) -> Either (Tuple j (q c j)) (p c)
+  { right :: forall p q c j. Input p q c j -> Output p q c j
   }
 
 type Instances =
@@ -61,7 +59,8 @@ else instance
         , bifunctors:
             Object.insert n { bimap: unsafeCoerce (bimap :: _ -> _ -> g _ _ -> g _ _) } bifunctors
         , dissects:
-            Object.insert n { right: unsafeCoerce (right :: _ (f _) (_ (g _ _) _) -> _) } dissects
+            Object.insert n { right: unsafeCoerce (right :: Input f g _ _ -> Output f g _ _) }
+              dissects
         }
     in
       instancesAux accumulator (Proxy :: _ rl)

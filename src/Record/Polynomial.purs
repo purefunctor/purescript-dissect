@@ -3,10 +3,8 @@ module Record.Polynomial where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
-import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
-import Data.Tuple (Tuple(..))
-import Dissect.Class (class Dissect)
+import Dissect.Class (class Dissect, Input(..), Output(..))
 import Dissect.Runtime.Instances as Instances
 import Foreign.Object (lookup)
 import Partial.Unsafe (unsafeCrashWith)
@@ -85,75 +83,69 @@ foreign import unsafeHead :: Record _ -> { key :: String, value :: _, rest :: Re
 
 instance Instances.DissectRow r s => Dissect (RecordF r) (RecordF_2 s) where
   right = case _ of
-    Left record ->
+    Init record ->
       let
         { instances, values } = coerceInternals record
 
         aux accumulator current
           | unsafeLength current == 0 =
-              Right (unsafeCoerce { instances, values: accumulator })
+              Return (unsafeCoerce { instances, values: accumulator })
           | otherwise =
               let
                 { key, value, rest } = unsafeHead current
               in
                 case lookup key instances.dissects of
-                  Just dissect -> case dissect.right (Left value) of
-                    Left (Tuple yield holed) ->
-                      Left
-                        ( Tuple yield
-                            ( unsafeCoerce
-                                { instances
-                                , holed: { key, value: holed }
-                                , done: accumulator
-                                , todo: rest
-                                }
-                            )
+                  Just dissect -> case dissect.right (Init value) of
+                    Yield yield holed ->
+                      Yield yield
+                        ( unsafeCoerce
+                            { instances
+                            , holed: { key, value: holed }
+                            , done: accumulator
+                            , todo: rest
+                            }
                         )
-                    Right done ->
+                    Return done ->
                       aux (Record.unsafeSet key done accumulator) rest
                   Nothing ->
                     unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"
       in
         aux {} values
-    Right (Tuple record value) ->
+    Next record value ->
       let
         { instances, holed, done, todo } = coerceInternals_2 record
 
         aux accumulator current
           | unsafeLength current == 0 =
-              Right (unsafeCoerce { instances, values: accumulator })
+              Return (unsafeCoerce { instances, values: accumulator })
           | otherwise =
               let
                 { key, value, rest } = unsafeHead current
               in
                 case lookup key instances.dissects of
-                  Just dissect -> case dissect.right (Left value) of
-                    Left (Tuple yield deeper) ->
-                      Left
-                        ( Tuple yield
-                            ( unsafeCoerce
-                                { instances
-                                , holed: { key, value: deeper }
-                                , done: accumulator
-                                , todo: rest
-                                }
-                            )
+                  Just dissect -> case dissect.right (Init value) of
+                    Yield yield deeper ->
+                      Yield yield
+                        ( unsafeCoerce
+                            { instances
+                            , holed: { key, value: deeper }
+                            , done: accumulator
+                            , todo: rest
+                            }
                         )
-                    Right done ->
+                    Return done ->
                       aux (Record.unsafeSet key done accumulator) rest
                   Nothing ->
                     unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"
       in
         case lookup holed.key instances.dissects of
-          Just dissect -> case dissect.right (Right (Tuple holed.value value)) of
-            Left (Tuple yield deeper) ->
-              Left
-                ( Tuple yield
-                    ( unsafeCoerce
-                        { instances, holed: { key: holed.key, value: deeper }, done, todo }
-                    )
+          Just dissect -> case dissect.right (Next holed.value value) of
+            Yield yield deeper ->
+              Yield yield
+                ( unsafeCoerce
+                    { instances, holed: { key: holed.key, value: deeper }, done, todo }
                 )
-            Right filled ->
+            Return filled ->
               aux (Record.unsafeSet holed.key filled done) todo
           Nothing ->
             unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"

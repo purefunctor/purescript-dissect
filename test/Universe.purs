@@ -6,7 +6,6 @@ import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM2)
 import Control.Monad.ST (run)
 import Control.Monad.ST.Internal as STRef
 import Data.Bifunctor (class Bifunctor)
-import Data.Either (Either(..))
 import Data.Functor.Mu (Mu(..))
 import Data.Functor.Polynomial (Const(..), Id(..), Product(..))
 import Data.Functor.Variant as Variant
@@ -14,9 +13,8 @@ import Data.List (List(..), (:))
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
-import Data.Tuple (Tuple(..))
 import Data.Variant as V
-import Dissect.Class (class Dissect, right)
+import Dissect.Class (class Dissect, Input(..), Output(..), right)
 import Partial.Unsafe (unsafeCrashWith)
 import Record.Polynomial (RecordF, from, to)
 import Safe.Coerce (coerce)
@@ -81,8 +79,8 @@ instance Bifunctor (Recurse_2 i) where
 
 instance Dissect (Recurse i) (Recurse_2 i) where
   right = case _ of
-    Left g -> Left (Tuple (unsafeCoerce g) Recurse_2)
-    Right (Tuple _ c) -> Right (unsafeCoerce c)
+    Init g -> Yield (unsafeCoerce g) Recurse_2
+    Next _ c -> Return (unsafeCoerce c)
 
 unrecurseV :: forall i a t r. R.Cons i a t r => Recurse i (V.Variant r) -> a
 unrecurseV variant = (unsafeCoerce variant).value
@@ -205,36 +203,36 @@ type AlgebraM :: (Type -> Type) -> (Type -> Type) -> Type -> Type
 type AlgebraM m f a = f a -> m a
 
 type RightFnA :: (Type -> Type) -> (Type -> Type -> Type) -> Type -> Type
-type RightFnA p q v =
-  Either (p (Mu p)) (Tuple (q v (Mu p)) v) -> Either (Tuple (Mu p) (q v (Mu p))) (p v)
+type RightFnA p q v = Input p q v (Mu p) -> Output p q v (Mu p)
 
 cata :: forall p q v. RightFnA p q v -> Algebra p v -> Mu p -> v
-cata right algebra (In pt) = go (right (Left pt)) Nil
+cata right algebra (In pt) = go (right (Init pt)) Nil
   where
-  go :: Either (Tuple (Mu p) (q v (Mu p))) (p v) -> List (q v (Mu p)) -> v
+  go :: Output p q v (Mu p) -> List (q v (Mu p)) -> v
   go index stack =
     case index of
-      Left (Tuple (In pt') pd) -> do
-        go (right (Left pt')) (pd : stack)
-      Right pv ->
+      Yield (In pt') pd -> do
+        go (right (Init pt')) (pd : stack)
+      Return pv ->
         case stack of
           (pd : stk) ->
-            go (right (Right (Tuple pd (algebra pv)))) stk
+            go (right (Next pd (algebra pv))) stk
           Nil ->
             algebra pv
 
 cataM :: forall m p q v. MonadRec m => RightFnA p q v -> AlgebraM m p v -> Mu p -> m v
-cataM right algebraM (In pt) = tailRecM2 go (right (Left pt)) Nil
+cataM right algebraM (In pt) = tailRecM2 go (right (Init pt)) Nil
   where
+  go :: Output p q v (Mu p) -> List (q v (Mu p)) -> _
   go index stack =
     case index of
-      Left (Tuple (In pt') pd) ->
-        pure (Loop { a: right (Left pt'), b: (pd : stack) })
-      Right pv ->
+      Yield (In pt') pd ->
+        pure (Loop { a: right (Init pt'), b: (pd : stack) })
+      Return pv ->
         case stack of
           (pd : stk) -> do
             pv' <- algebraM pv
-            pure (Loop { a: right (Right (Tuple pd pv')), b: stk })
+            pure (Loop { a: right (Next pd pv'), b: stk })
           Nil -> do
             Done <$> algebraM pv
 
