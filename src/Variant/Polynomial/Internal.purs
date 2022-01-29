@@ -6,7 +6,8 @@ import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Either (Either)
 import Data.Tuple (Tuple)
 import Dissect.Class (class Dissect, right)
-import Foreign.Object (Object, empty, insert)
+import Foreign.Object (Object, insert)
+import Foreign.Object as Object
 import Prim.RowList (Cons, Nil, RowList)
 import Type.Prelude (class IsSymbol, class ListToRow, class RowToList, Proxy(..), reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
@@ -35,50 +36,54 @@ type DissectClass =
   { right :: forall p q c j. Either (p j) (Tuple (q c j) c) -> Either (Tuple j (q c j)) (p c)
   }
 
--- type PlugClass =
---   { plug :: forall p q x. x -> q x x -> p x
---   }
-
 type Instances =
   { functors :: Object FunctorClass
   , bifunctors :: Object BifunctorClass
   , dissects :: Object DissectClass
-  -- , plugs :: Object PlugClass
+  }
+
+emptyInstances :: Instances
+emptyInstances =
+  { functors: Object.empty
+  , bifunctors: Object.empty
+  , dissects: Object.empty
   }
 
 class FindInstances (rl :: RowList (Type -> Type)) where
-  instances :: Proxy rl -> Instances
+  instancesAux :: Instances -> Proxy rl -> Instances
 
 instance FindInstances Nil where
-  instances _ =
-    { functors: empty
-    , bifunctors: empty
-    , dissects: empty
-    -- , plugs: empty
-    }
+  instancesAux accumulator _ = accumulator
 
 else instance
   ( IsSymbol n
   , Functor f
   , Dissect f g
-  , {- Plug f g, -} Bifunctor g
+  , Bifunctor g
   , FindInstances rl
   ) =>
   FindInstances (Cons n f rl) where
-  instances _ =
+  instancesAux { functors, bifunctors, dissects } _ =
     let
-      { functors, bifunctors, dissects } = instances (Proxy :: _ rl)
       n = reflectSymbol (Proxy :: _ n)
+
+      accumulator =
+        { functors:
+            insert n { map: unsafeCoerce (map :: _ -> f _ -> f _) } functors
+        , bifunctors:
+            insert n { bimap: unsafeCoerce (bimap :: _ -> _ -> g _ _ -> g _ _) } bifunctors
+        , dissects:
+            insert n { right: unsafeCoerce (right :: _ (f _) (_ (g _ _) _) -> _) } dissects
+        }
     in
-      { functors:
-          insert n { map: unsafeCoerce (map :: _ -> f _ -> f _) } functors
-      , bifunctors:
-          insert n { bimap: unsafeCoerce (bimap :: _ -> _ -> g _ _ -> g _ _) } bifunctors
-      , dissects:
-          insert n { right: unsafeCoerce (right :: _ (f _) (_ (g _ _) _) -> _) } dissects
-      -- , plugs:
-      --     insert n { plug: unsafeCoerce (plug :: _ -> g _ _ -> f _) } plugs
-      }
+      instancesAux accumulator (Proxy :: _ rl)
+
+instances
+  :: forall rl
+   . FindInstances rl
+  => Proxy rl
+  -> Instances
+instances = instancesAux emptyInstances
 
 class DissectRowI :: RowList (Type -> Type) -> RowList (Type -> Type -> Type) -> Constraint
 class DissectRowI r s | r -> s
