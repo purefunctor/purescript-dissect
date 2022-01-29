@@ -11,6 +11,7 @@ import Data.Functor.Variant as Variant
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Dissect.Class (class Dissect)
+import Dissect.Runtime.Instances as Instances
 import Foreign.Object (lookup)
 import Partial.Unsafe (unsafeCrashWith)
 import Prim.Row as R
@@ -41,18 +42,18 @@ inj proxy value = coerceV $ Internal.OpenVariantFRep
 newtype VariantF :: forall k. Row (k -> Type) -> k -> Type
 newtype VariantF r a =
   VariantF
-    { instances :: Internal.Instances
+    { instances :: Instances.Instances
     , value :: OpenVariantF r a
     }
 
 instantiate
   :: forall r rl a
    . RL.RowToList r rl
-  => Internal.FindInstances rl
+  => Instances.FindInstances rl
   => OpenVariantF r a
   -> VariantF r a
 instantiate value =
-  VariantF { instances: Internal.instances (Proxy :: _ rl), value }
+  VariantF { instances: Instances.instances (Proxy :: _ rl), value }
 
 data OpenVariantF_2 :: forall k l. Row (k -> l -> Type) -> k -> l -> Type
 data OpenVariantF_2 r a b
@@ -75,7 +76,7 @@ inj_2 proxy value = coerceV $ Internal.OpenVariantFRep_2
 newtype VariantF_2 :: forall k l. Row (k -> l -> Type) -> k -> l -> Type
 newtype VariantF_2 r a b =
   VariantF_2
-    { instances :: Internal.Instances
+    { instances :: Instances.Instances
     , value :: OpenVariantF_2 r a b
     }
 
@@ -122,7 +123,7 @@ instance Bifunctor (VariantF_2 r) where
     coerceR = unsafeCoerce
 
 instance
-  Internal.DissectRow r s =>
+  Instances.DissectRow r s =>
   Dissect (VariantF r) (VariantF_2 s) where
   right = case _ of
     Left (VariantF wrapper@{ instances, value }) ->

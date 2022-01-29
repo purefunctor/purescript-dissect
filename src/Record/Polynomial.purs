@@ -7,6 +7,7 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Tuple (Tuple(..))
 import Dissect.Class (class Dissect)
+import Dissect.Runtime.Instances as Instances
 import Foreign.Object (lookup)
 import Partial.Unsafe (unsafeCrashWith)
 import Prim.Row as R
@@ -15,7 +16,6 @@ import Record.Unsafe as Record
 import Type.Equality (class TypeEquals)
 import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
-import Variant.Polynomial.Internal as Internal
 
 data RecordF :: Row (Type -> Type) -> Type -> Type
 data RecordF r a
@@ -60,10 +60,10 @@ from
   :: forall r a r' rl'
    . From r a r'
   => RL.RowToList r' rl'
-  => Internal.FindInstances rl'
+  => Instances.FindInstances rl'
   => Record r
   -> RecordF r' a
-from values = unsafeCoerce { instances: Internal.instances (Proxy :: _ rl'), values }
+from values = unsafeCoerce { instances: Instances.instances (Proxy :: _ rl'), values }
 
 foreign import mapRecordF :: forall r a b. (a -> b) -> (RecordF r a) -> (RecordF r b)
 
@@ -83,7 +83,7 @@ foreign import unsafeLength :: Record _ -> Int
 
 foreign import unsafeHead :: Record _ -> { key :: String, value :: _, rest :: Record _ }
 
-instance Internal.DissectRow r s => Dissect (RecordF r) (RecordF_2 s) where
+instance Instances.DissectRow r s => Dissect (RecordF r) (RecordF_2 s) where
   right = case _ of
     Left record ->
       let
@@ -158,9 +158,9 @@ instance Internal.DissectRow r s => Dissect (RecordF r) (RecordF_2 s) where
           Nothing ->
             unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"
     where
-    coerceInternals :: _ -> { instances :: Internal.Instances, values :: Record _ }
+    coerceInternals :: _ -> { instances :: Instances.Instances, values :: Record _ }
     coerceInternals = unsafeCoerce
 
     coerceInternals_2
-      :: _ -> { instances :: Internal.Instances, holed :: _, done :: _, todo :: _ }
+      :: _ -> { instances :: Instances.Instances, holed :: _, done :: _, todo :: _ }
     coerceInternals_2 = unsafeCoerce
