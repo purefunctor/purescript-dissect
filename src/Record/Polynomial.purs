@@ -1,13 +1,13 @@
 -- | This module provides a dissectible `Record`-like type. Similar to
 -- | `VariantF`, this serves as an alternative to deeply-nested `Product`
--- | types. Unlike the latter though, `RecordF` has no definitive order
--- | of evaluation, and this must be taken into account especially when
--- | dealing with operations involving effects.
+-- | types. Note that the order in which values are yielded is based on
+-- | the row type signature.
 module Record.Polynomial where
 
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
+import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..))
 import Dissect.Class (class Dissect, Input(..), Output(..))
 import Dissect.Runtime.Instances as Instances
@@ -17,7 +17,7 @@ import Prim.Row as R
 import Prim.RowList as RL
 import Record.Unsafe as Record
 import Type.Equality (class TypeEquals)
-import Type.Prelude (Proxy(..))
+import Type.Prelude (class IsSymbol, Proxy(..), reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | A record whose values are functors parameterized by some type `a`.
@@ -44,6 +44,19 @@ instance (RL.RowToList r rl, ToAux rl a r') => To r a r'
 to :: forall r a r'. To r a r' => RecordF r a -> Record r'
 to = unsafeCoerce >>> _.values
 
+class FindKeys :: forall k. RL.RowList k -> Constraint
+class FindKeys rl where
+  findKeys :: Proxy rl -> List String
+
+instance FindKeys RL.Nil where
+  findKeys _ = mempty
+
+else instance (FindKeys future, IsSymbol label) => FindKeys (RL.Cons label value future) where
+  findKeys _ = current : future
+    where
+    current = reflectSymbol (Proxy :: _ label)
+    future = findKeys (Proxy :: _ future)
+
 class FromAux :: RL.RowList Type -> Type -> Row (Type -> Type) -> Constraint
 class FromAux rl a r | rl -> a r
 
@@ -67,9 +80,15 @@ from
    . From r a r'
   => RL.RowToList r' rl'
   => Instances.FindInstances rl'
+  => FindKeys rl'
   => Record r
   -> RecordF r' a
-from values = unsafeCoerce { instances: Instances.instances (Proxy :: _ rl'), values }
+from values =
+  unsafeCoerce
+    { instances: Instances.instances (Proxy :: _ rl')
+    , keys: findKeys (Proxy :: _ rl')
+    , values
+    }
 
 foreign import mapRecordF :: forall r a b. (a -> b) -> (RecordF r a) -> (RecordF r b)
 
@@ -93,74 +112,95 @@ instance Instances.DissectRow r s => Dissect (RecordF r) (RecordF_2 s) where
   right = case _ of
     Init record ->
       let
-        { instances, values } = coerceInternals record
+        { instances, keys, values } = coerceInternals record
 
-        aux accumulator current
-          | unsafeLength current == 0 =
-              Return (unsafeCoerce { instances, values: accumulator })
-          | otherwise =
+        aux finishedValues currentKeys =
+          case currentKeys of
+            Nil ->
+              Return (unsafeCoerce { instances, keys, values: finishedValues })
+            key : keysRest ->
               let
-                { key, value, rest } = unsafeHead current
+                value = Record.unsafeGet key values
               in
                 case lookup key instances.dissects of
                   Just dissect -> case dissect.right (Init value) of
-                    Yield yield holed ->
+                    Yield yield holedValue ->
                       Yield yield
                         ( unsafeCoerce
                             { instances
-                            , holed: { key, value: holed }
-                            , done: accumulator
-                            , todo: rest
+                            , keys
+                            , values
+                            , holed: { key, value: holedValue }
+                            , keysTodo: keysRest
+                            , valuesFinished: finishedValues
                             }
                         )
-                    Return done ->
-                      aux (Record.unsafeSet key done accumulator) rest
+                    Return finished ->
+                      aux (Record.unsafeSet key finished finishedValues) keysRest
                   Nothing ->
                     unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"
       in
-        aux {} values
-    Next record value ->
+        aux {} keys
+    Next record filler ->
       let
-        { instances, holed, done, todo } = coerceInternals_2 record
+        { instances, keys, values, holed, keysTodo, valuesFinished } = coerceInternals_2 record
 
-        aux accumulator current
-          | unsafeLength current == 0 =
-              Return (unsafeCoerce { instances, values: accumulator })
-          | otherwise =
+        aux finishedValues currentKeys =
+          case currentKeys of
+            Nil ->
+              Return (unsafeCoerce { instances, keys, values: finishedValues })
+            key : keysRest ->
               let
-                { key, value, rest } = unsafeHead current
+                value = Record.unsafeGet key values
               in
                 case lookup key instances.dissects of
                   Just dissect -> case dissect.right (Init value) of
-                    Yield yield deeper ->
+                    Yield yield holedValue ->
                       Yield yield
                         ( unsafeCoerce
                             { instances
-                            , holed: { key, value: deeper }
-                            , done: accumulator
-                            , todo: rest
+                            , keys
+                            , values
+                            , holed: { key, value: holedValue }
+                            , keysTodo: keysRest
+                            , valuesFinished: finishedValues
                             }
                         )
-                    Return done ->
-                      aux (Record.unsafeSet key done accumulator) rest
+                    Return finished ->
+                      aux (Record.unsafeSet key finished finishedValues) keysRest
                   Nothing ->
                     unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"
       in
         case lookup holed.key instances.dissects of
-          Just dissect -> case dissect.right (Next holed.value value) of
+          Just dissect -> case dissect.right (Next holed.value filler) of
             Yield yield deeper ->
               Yield yield
                 ( unsafeCoerce
-                    { instances, holed: { key: holed.key, value: deeper }, done, todo }
+                    { instances
+                    , keys
+                    , values
+                    , holed: holed { value = deeper }
+                    , keysTodo
+                    , valuesFinished
+                    }
                 )
-            Return filled ->
-              aux (Record.unsafeSet holed.key filled done) todo
+            Return finished ->
+              aux (Record.unsafeSet holed.key finished valuesFinished) keysTodo
           Nothing ->
             unsafeCrashWith "Pattern match failed at Record.Polynomial.Dissec.right"
+
     where
-    coerceInternals :: _ -> { instances :: Instances.Instances, values :: Record _ }
+    coerceInternals
+      :: _ -> { instances :: Instances.Instances, keys :: List String, values :: Record _ }
     coerceInternals = unsafeCoerce
 
     coerceInternals_2
-      :: _ -> { instances :: Instances.Instances, holed :: _, done :: _, todo :: _ }
+      :: _
+      -> { instances :: Instances.Instances
+         , keys :: _
+         , values :: _
+         , holed :: _
+         , keysTodo :: _
+         , valuesFinished :: _
+         }
     coerceInternals_2 = unsafeCoerce

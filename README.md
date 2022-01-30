@@ -197,9 +197,8 @@ onMatchExample' = closedVariantF # onMatch
 The `Record.Polynomial` module provides a dissectible that operates on a
 `Record`, serving as an alternative to deeply-nested `Product` types.
 The `to` and `from` functions are used to convert back and forth
-`Record` and `RecordF`. Note that unlike `Product`, there's no
-definitive order to which elements are yielded first, and as such,
-effectful operations must be treated with care.
+`Record` and `RecordF`. Note that the order in which elements are
+yielded first is based on the row type signature.
 
 ``` purescript
 type ConsR =
