@@ -104,10 +104,6 @@ foreign import bimapRecordF
 instance Bifunctor (RecordF_2 r) where
   bimap = bimapRecordF
 
-foreign import unsafeLength :: Record _ -> Int
-
-foreign import unsafeHead :: Record _ -> { key :: String, value :: _, rest :: Record _ }
-
 instance Instances.DissectRow r s => Dissect (RecordF r) (RecordF_2 s) where
   right = case _ of
     Init record ->

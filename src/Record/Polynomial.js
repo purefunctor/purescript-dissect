@@ -18,13 +18,3 @@ exports.bimapRecordF = (f) => (g) => (x) => {
     };
     return { holed, instances, done, todo };
 };
-
-exports.unsafeLength = (record) => {
-    return Object.keys(record).length;
-};
-
-exports.unsafeHead = (record) => {
-    let entries = Object.entries(record);
-    let [key, value] = entries.pop();
-    return { key, value, rest: Object.fromEntries(entries) };
-}
