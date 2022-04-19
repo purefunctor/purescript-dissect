@@ -3,7 +3,7 @@ module Test.Main where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
-import Dissect.Class (class Dissect, Result(..))
+import Dissect.Class (class Dissect, Result, yield, return)
 import Effect (Effect)
 import Effect.Class.Console (log)
 
@@ -26,12 +26,12 @@ instance Bifunctor TreeF_2 where
 
 instance Dissect TreeF TreeF_2 where
   init = case _ of
-    Leaf -> Return Leaf
-    Fork m n o -> Yield m (ForkRR n o)
+    Leaf -> return Leaf
+    Fork m n o -> yield m (ForkRR n o)
   next w c = case w of
-    ForkRR m n -> Yield m (ForkLR c n)
-    ForkLR n m -> Yield m (ForkLL n c)
-    ForkLL n o -> Return (Fork n o c)
+    ForkRR m n -> yield m (ForkLR c n)
+    ForkLR n m -> yield m (ForkLL n c)
+    ForkLL n o -> return (Fork n o c)
 
 data List a n
   = Nil
@@ -49,9 +49,9 @@ instance Bifunctor (List_2 a) where
 
 instance Dissect (List a) (List_2 a) where
   init = case _ of
-    Nil -> Return Nil
-    Cons a n -> Yield n (Cons_2 a)
-  next (Cons_2 a) n = Return (Cons a n)
+    Nil -> return Nil
+    Cons a n -> yield n (Cons_2 a)
+  next (Cons_2 a) n = return (Cons a n)
 
 main :: Effect Unit
 main = do

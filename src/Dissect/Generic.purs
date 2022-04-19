@@ -19,7 +19,9 @@ import Prelude
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Functor.Clown (Clown(..))
 import Data.Functor.Joker (Joker(..))
-import Dissect.Class (class Dissect, Result(..), init, next)
+import Data.Newtype (unwrap)
+import Data.Variant (match)
+import Dissect.Class (class Dissect, Result, init, next, yield, return)
 import Partial.Unsafe (unsafeCrashWith)
 
 -- | The constant functor, which maps all `b` to some constant `a`.
@@ -96,12 +98,12 @@ refute :: forall a. Void -> a
 refute _ = unsafeCrashWith "Invalid dissection!"
 
 instance Dissect (Const a) (Const_2 Void) where
-  init (Const a) = Return (Const a)
+  init (Const a) = return (Const a)
   next (Const_2 z) _ = refute z
 
 instance Dissect Id (Const_2 Unit) where
-  init (Id j) = Yield j (Const_2 unit)
-  next (Const_2 _) c = Return (Id c)
+  init (Id j) = yield j (Const_2 unit)
+  next (Const_2 _) c = return (Id c)
 
 instance
   ( Dissect p p'
@@ -119,8 +121,10 @@ mindp
   => Dissect q q'
   => Result p p' c j
   -> Result (Sum p q) (Sum_2 p' q') c j
-mindp (Yield j pd) = Yield j (SumL_2 pd)
-mindp (Return pc) = Return (SumL pc)
+mindp = unwrap >>> match
+  { yield: \{ j, qcj } -> yield j (SumL_2 qcj)
+  , return: return <<< SumL
+  }
 
 mindq
   :: forall p p' q q' c j
@@ -128,8 +132,10 @@ mindq
   => Dissect q q'
   => Result q q' c j
   -> Result (Sum p q) (Sum_2 p' q') c j
-mindq (Yield j qd) = Yield j (SumR_2 qd)
-mindq (Return qc) = Return (SumR qc)
+mindq = unwrap >>> match
+  { yield: \{ j, qcj } -> yield j (SumR_2 qcj)
+  , return: return <<< SumR
+  }
 
 instance
   ( Dissect p p'
@@ -147,8 +153,10 @@ mindp'
   => Result p p' c j
   -> q j
   -> Result (Product p q) (Sum_2 (Product_2 p' (Joker q)) (Product_2 (Clown p) q')) c j
-mindp' (Yield j pd) qj = Yield j (SumL_2 (Product_2 pd (Joker qj)))
-mindp' (Return pc) qj = mindq' pc (init qj)
+mindp' rs qj = unwrap rs # match
+  { yield: \{ j, qcj } -> yield j (SumL_2 (Product_2 qcj (Joker qj)))
+  , return: \pc -> mindq' pc (init qj)
+  }
 
 mindq'
   :: forall p p' q q' c j
@@ -157,5 +165,7 @@ mindq'
   => p c
   -> Result q q' c j
   -> Result (Product p q) (Sum_2 (Product_2 p' (Joker q)) (Product_2 (Clown p) q')) c j
-mindq' pc (Yield j qd) = Yield j (SumR_2 (Product_2 (Clown pc) qd))
-mindq' pc (Return qc) = Return (Product pc qc)
+mindq' pc = unwrap >>> match
+  { yield: \{ j, qcj } -> yield j (SumR_2 (Product_2 (Clown pc) qcj))
+  , return: \qc -> return (Product pc qc)
+  }
