@@ -21,7 +21,7 @@ import Data.Functor.Clown (Clown(..))
 import Data.Functor.Joker (Joker(..))
 import Data.Newtype (unwrap)
 import Data.Variant (match)
-import Dissect.Class (class Dissect, Result, init, next, yield, return)
+import Dissect.Class (class Dissect, Result, init, next, return, yield)
 import Partial.Unsafe (unsafeCrashWith)
 
 -- | The constant functor, which maps all `b` to some constant `a`.

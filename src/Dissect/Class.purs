@@ -17,12 +17,12 @@ import Type.Prelude (Proxy(..))
 newtype Result :: (Type -> Type) -> (Type -> Type -> Type) -> Type -> Type -> Type
 newtype Result p q c j = Result
   ( Variant
-    ( yield ::
-        { j :: j
-        , qcj :: q c j
-        }
-    , return :: p c
-    )
+      ( yield ::
+          { j :: j
+          , qcj :: q c j
+          }
+      , return :: p c
+      )
   )
 
 yield :: forall p q c j. j -> (q c j) -> Result p q c j

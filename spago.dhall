@@ -1,6 +1,7 @@
 { name = "dissect"
 , dependencies =
-  [ "bifunctors"
+  [ "arrays"
+  , "bifunctors"
   , "console"
   , "effect"
   , "fixed-points"
