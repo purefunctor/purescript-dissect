@@ -3,9 +3,12 @@ module Test.Main where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
-import Dissect.Class (class Dissect, Result, yield, return)
+import Dissect.Class (class Dissect, return, yield)
 import Effect (Effect)
-import Effect.Class.Console (log)
+import Effect.Aff (launchAff_)
+import Test.Dissect as Dissect
+import Test.Spec.Reporter.Console (consoleReporter)
+import Test.Spec.Runner (runSpec)
 
 data TreeF n
   = Leaf
@@ -54,5 +57,5 @@ instance Dissect (List a) (List_2 a) where
   next (Cons_2 a) n = return (Cons a n)
 
 main :: Effect Unit
-main = do
-  log "Finished."
+main = launchAff_ $ runSpec [ consoleReporter ] do
+  Dissect.spec

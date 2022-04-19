@@ -1,6 +1,7 @@
 { name = "dissect"
 , dependencies =
-  [ "arrays"
+  [ "aff"
+  , "arrays"
   , "bifunctors"
   , "console"
   , "effect"
@@ -14,6 +15,7 @@
   , "partial"
   , "prelude"
   , "safe-coerce"
+  , "spec"
   , "st"
   , "tailrec"
   , "type-equality"
