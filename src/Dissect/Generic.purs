@@ -28,6 +28,8 @@ import Partial.Unsafe (unsafeCrashWith)
 newtype Const :: forall k. Type -> k -> Type
 newtype Const a b = Const a
 
+derive instance Eq a => Eq (Const a b)
+derive instance Ord a => Ord (Const a b)
 derive instance Functor (Const a)
 
 instance Show a => Show (Const a b) where
@@ -36,6 +38,8 @@ instance Show a => Show (Const a b) where
 -- | The identity functor, which maps all `a` back into `a`.
 newtype Id a = Id a
 
+derive instance Eq a => Eq (Id a)
+derive instance Ord a => Ord (Id a)
 derive instance Functor Id
 
 instance Show a => Show (Id a) where
@@ -45,13 +49,24 @@ instance Show a => Show (Id a) where
 data Sum :: forall k. (k -> Type) -> (k -> Type) -> k -> Type
 data Sum a b c = SumL (a c) | SumR (b c)
 
+infixr 4 type Sum as :+:
+
+instance (Eq (a c), Eq (b c)) => Eq (Sum a b c) where
+  eq (SumL a) (SumL b) = eq a b
+  eq (SumR a) (SumR b) = eq a b
+  eq _ _ = false
+
+instance (Ord (a c), Ord (b c)) => Ord (Sum a b c) where
+  compare (SumL a) (SumL b) = compare a b
+  compare (SumR a) (SumR b) = compare a b
+  compare (SumL _) (SumR _) = LT
+  compare (SumR _) (SumL _) = GT
+
 derive instance (Functor a, Functor b) => Functor (Sum a b)
 
 instance (Show (a c), Show (b c), Show c) => Show (Sum a b c) where
   show (SumL l) = "(SumL " <> show l <> ")"
   show (SumR r) = "(SumR " <> show r <> ")"
-
-infixr 4 type Sum as :+:
 
 -- | The product of polynomial functors.
 data Product :: forall k. (k -> Type) -> (k -> Type) -> k -> Type
@@ -59,6 +74,12 @@ data Product a b c = Product (a c) (b c)
 
 infixr 5 type Product as :*:
 infixr 5 Product as :*:
+
+instance (Eq (a c), Eq (b c)) => Eq (Product a b c) where
+  eq (Product a b) (Product c d) = eq a c && eq b d
+
+instance (Ord (a c), Ord (b c)) => Ord (Product a b c) where
+  compare (Product a b) (Product c d) = compare a c <> compare b d
 
 instance (Show (a c), Show (b c), Show c) => Show (Product a b c) where
   show (Product a b) = "(Product " <> show a <> " " <> show b <> ")"
