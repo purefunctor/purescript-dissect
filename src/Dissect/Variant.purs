@@ -7,9 +7,13 @@ import Prelude
 
 import Data.Bifunctor (class Bifunctor, bimap)
 import Data.Newtype (unwrap)
-import Data.Variant (match)
+import Data.Variant as Variant
 import Dissect.Class (class Dissect, Result, init, next, return, yield)
-import Prim.Row as Row
+import Partial.Unsafe (unsafeCrashWith)
+import Prim.Row as R
+import Prim.RowList as RL
+import Record.Unsafe as Record
+import Type.Equality (class TypeEquals)
 import Type.Prelude (class IsSymbol, Proxy, reflectSymbol)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -38,7 +42,7 @@ injF
   :: forall p q r r' t a
    . IsSymbol t
   => Dissect p q
-  => Row.Cons t (Pair p q) r' r
+  => R.Cons t (Pair p q) r' r
   => Proxy t
   -> p a
   -> VariantF r a
@@ -88,7 +92,7 @@ injB
   :: forall p q r r' t a b
    . IsSymbol t
   => Dissect p q
-  => Row.Cons t (Pair p q) r' r
+  => R.Cons t (Pair p q) r' r
   => Proxy t
   -> q a b
   -> VariantB r a b
@@ -124,7 +128,7 @@ instance Dissect (VariantF r) (VariantB r) where
     let
       VariantFRep r = unsafeCoerce v
     in
-      r.init r.value # unwrap >>> match
+      r.init r.value # unwrap >>> Variant.match
         { yield: \{ j, qcj } ->
             yield j $ unsafeCoerce $ VariantBRep $ r
               { value = qcj
@@ -139,7 +143,7 @@ instance Dissect (VariantF r) (VariantB r) where
     let
       VariantBRep r = unsafeCoerce v
     in
-      r.next r.value c # unwrap >>> match
+      r.next r.value c # unwrap >>> Variant.match
         { yield: \{ j, qcj } ->
             yield j $ unsafeCoerce $ VariantBRep $ r
               { value = qcj
@@ -149,3 +153,58 @@ instance Dissect (VariantF r) (VariantB r) where
               { value = pc
               }
         }
+
+-- Pattern Matching, adapted from the `variant` package.
+
+class VariantFMatchCases :: RL.RowList Type -> Row Type -> Type -> Type -> Constraint
+class VariantFMatchCases rl vo a b | rl -> vo a b
+
+instance
+  ( VariantFMatchCases rl vo' a b
+  , R.Cons sym (Pair p q) vo' vo
+  , TypeEquals k (p a -> b)
+  ) =>
+  VariantFMatchCases (RL.Cons sym k rl) vo a b
+
+instance VariantFMatchCases RL.Nil () a b
+
+onMatch
+  :: forall rl r r1 r2 r3 a b
+   . RL.RowToList r rl
+  => VariantFMatchCases rl r1 a b
+  => R.Union r1 r2 r3
+  => Record r
+  -> (VariantF r2 a -> b)
+  -> VariantF r3 a
+  -> b
+onMatch f k v =
+  let
+    VariantFRep r = coerceTo v
+  in
+    if Record.unsafeHas r.tag f then
+      Record.unsafeGet r.tag f r.value
+    else
+      k (coerceRn v)
+  where
+  coerceTo :: forall p q. VariantF r3 a -> VariantFRep p q a
+  coerceTo = unsafeCoerce
+
+  coerceRn :: VariantF r3 a -> VariantF r2 a
+  coerceRn = unsafeCoerce
+
+match
+  :: forall rl r r1 r2 a b
+   . RL.RowToList r rl
+  => VariantFMatchCases rl r1 a b
+  => R.Union r1 () r2
+  => Record r
+  -> VariantF r2 a
+  -> b
+match = flip onMatch \v ->
+  let
+    VariantFRep r = coerceTo v
+  in
+    unsafeCrashWith $ "Dissect.Variant: pattern match failure [" <> r.tag <> "]"
+  where
+  coerceTo :: forall p q. VariantF () a -> VariantFRep p q a
+  coerceTo = unsafeCoerce
