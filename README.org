@@ -1,0 +1,10 @@
+* purescript-dissect
+
+An implementation of [[https://dl.acm.org/doi/abs/10.1145/1328438.1328474][Clowns to the Left of me, Jokers to the Right (Pearl): Dissecting Data
+Structures]] by Conor McBride in PureScript.
+
+** Installation
+#+begin_src sh
+$ spago install dissect
+#+end_src
+

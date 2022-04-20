@@ -3,9 +3,12 @@ module Test.Main where
 import Prelude
 
 import Data.Bifunctor (class Bifunctor)
-import Dissect.Class (class Dissect, Input(..), Output(..))
+import Dissect.Class (class Dissect, return, yield)
 import Effect (Effect)
-import Effect.Class.Console (log)
+import Effect.Aff (launchAff_)
+import Test.Dissect as Dissect
+import Test.Spec.Reporter.Console (consoleReporter)
+import Test.Spec.Runner (runSpec)
 
 data TreeF n
   = Leaf
@@ -25,13 +28,13 @@ instance Bifunctor TreeF_2 where
     ForkLL n0 n1 -> ForkLL (f n0) (f n1)
 
 instance Dissect TreeF TreeF_2 where
-  right = case _ of
-    Init Leaf -> Return Leaf
-    Init (Fork m n o) -> Yield m (ForkRR n o)
-    Next w c -> case w of
-      ForkRR m n -> Yield m (ForkLR c n)
-      ForkLR n m -> Yield m (ForkLL n c)
-      ForkLL n o -> Return (Fork n o c)
+  init = case _ of
+    Leaf -> return Leaf
+    Fork m n o -> yield m (ForkRR n o)
+  next w c = case w of
+    ForkRR m n -> yield m (ForkLR c n)
+    ForkLR n m -> yield m (ForkLL n c)
+    ForkLL n o -> return (Fork n o c)
 
 data List a n
   = Nil
@@ -48,11 +51,11 @@ instance Bifunctor (List_2 a) where
   bimap _ _ (Cons_2 a) = (Cons_2 a)
 
 instance Dissect (List a) (List_2 a) where
-  right = case _ of
-    Init Nil -> Return Nil
-    Init (Cons a n) -> Yield n (Cons_2 a)
-    Next (Cons_2 a) n -> Return (Cons a n)
+  init = case _ of
+    Nil -> return Nil
+    Cons a n -> yield n (Cons_2 a)
+  next (Cons_2 a) n = return (Cons a n)
 
 main :: Effect Unit
-main = do
-  log "Finished."
+main = launchAff_ $ runSpec [ consoleReporter ] do
+  Dissect.spec
