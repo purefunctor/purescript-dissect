@@ -51,19 +51,23 @@ class (Functor p, Bifunctor q) <= Dissect p q | p -> q where
 
 foreign import mapContinueImpl
   :: forall p q c j
-   . (q c j -> c -> Result p q c j)
+   . (p j -> Result p q c j)
+  -> (q c j -> c -> Result p q c j)
   -> (j -> c)
-  -> Result p q c j
+  -> p j
   -> p c
 
 -- | A tail-recursive `map` operation, implemented in terms of `Dissect`.
 map :: forall p q a b. Dissect p q => (a -> b) -> p a -> p b
 map =
   let
+    init' :: p a -> Result p q b a
+    init' = init
+
     next' :: q b a -> b -> Result p q b a
     next' = next
   in
-    \f -> mapContinueImpl next' f <<< init
+    mapContinueImpl init' next'
 
 -- | A tail-recursive `traverse` operation, implemented in terms of `Dissect`.
 -- |
